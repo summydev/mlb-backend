@@ -56,6 +56,38 @@ async def register_user(user_data: UserRegister, session: Session = Depends(get_
         "message": "Verify your email",
         "user_id": new_user.id
     }
+@app.get("/auth/verify-email", status_code=status.HTTP_200_OK)
+async def verify_email(token: str, session: Session = Depends(get_session)):
+    """
+    This endpoint catches the magic link.
+    For our mock testing, it just finds the most recently created 
+    unverified user and flips them to verified!
+    """
+    if token != "mock-magic-link-token":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired verification token."
+        )
+    
+    # Find the most recent unverified user in the database
+    statement = select(User).where(User.is_verified == False).order_by(User.id.desc())
+    user_to_verify = session.exec(statement).first()
+    
+    if not user_to_verify:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No pending accounts found to verify."
+        )
+        
+    # Flip the switch!
+    user_to_verify.is_verified = True
+    session.add(user_to_verify)
+    session.commit()
+    
+    return {
+        "message": "Account verified successfully! You can now return to the app and log in."
+    }
+
 @app.post("/auth/login", response_model=TokenResponse)
 async def login_user(credentials: UserLogin, session: Session = Depends(get_session)):
     email = credentials.email.lower()
