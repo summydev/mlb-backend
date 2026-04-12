@@ -19,7 +19,7 @@ app = FastAPI(title="myLB Auth API", version="1.0", lifespan=lifespan)
 async def register_user(user_data: UserRegister, session: Session = Depends(get_session)):
     email = user_data.email.lower()
     
-    # 1. Check if email already exists in the database
+    # 1. Check if email already exists
     statement = select(User).where(User.email == email)
     existing_user = session.exec(statement).first()
     
@@ -29,24 +29,33 @@ async def register_user(user_data: UserRegister, session: Session = Depends(get_
             detail="An account with this email already exists. Log in instead?"
         )
     
-    # 2. Create new user and save to database
+    # 2. Create new user
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         name=user_data.name,
         email=email,
         hashed_password=hashed_password,
-        is_verified=False 
+        is_verified=False  # <-- Make sure this is False again!
     )
     
     session.add(new_user)
     session.commit()
-    session.refresh(new_user) # This grabs the new auto-generated ID from the database
+    session.refresh(new_user)
+    
+    # 3. Generate the mock verification link
+    # We use a hardcoded token for now to match our /auth/verify-email endpoint
+    verification_link = f"https://mlb-backend-9jmu.onrender.com/auth/verify-email?token=mock-magic-link-token"
+    
+    # 4. Print the "email" to the Render logs
+    print("\n" + "="*50)
+    print(f"📧 MOCK EMAIL SENT TO: {email}")
+    print(f"🔗 CLICK HERE TO VERIFY: {verification_link}")
+    print("="*50 + "\n")
     
     return {
         "message": "Verify your email",
         "user_id": new_user.id
     }
-
 @app.post("/auth/login", response_model=TokenResponse)
 async def login_user(credentials: UserLogin, session: Session = Depends(get_session)):
     email = credentials.email.lower()
