@@ -27,7 +27,7 @@ from schemas import (
 from ai_service import generate_deepseek_solution, generate_deepseek_study_plan
 from models import StudyPlan, StudySession
 import uuid
- 
+from typing import Optional, List
 
 # This ensures the database tables are created when the app starts
 @asynccontextmanager
