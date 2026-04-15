@@ -80,3 +80,11 @@ class StudySession(SQLModel, table=True):
     
     # Relationship back to the StudyPlan
     plan: Optional[StudyPlan] = Relationship(back_populates="sessions")
+
+# Add this to the bottom of models.py
+class DailyActivity(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    
+    date: str # Stored as YYYY-MM-DD so it's easy to query
+    xp_earned: int = 0

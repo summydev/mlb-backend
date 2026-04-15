@@ -60,12 +60,13 @@ class UserDashboardInfo(BaseModel):
 
 class PetDashboardInfo(BaseModel):
     name: str
-    type: str # enum: nova | pip | luna | zap
+    type: str 
     level: int
     xp: int
     xp_to_next: int
-    mood: str # enum: energised | happy | neutral | tired | sad
-
+    mood: str 
+    xp_history: List[int] # <-- ADD THIS LINE
+    
 class StreakInfo(BaseModel):
     days: int
     active_today: bool

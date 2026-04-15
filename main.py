@@ -1,12 +1,12 @@
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, status, Depends
 from sqlmodel import Session, select
 from jose import jwt, JWTError
 
 # Assuming these exist based on your previous snippets
 from database import create_db_and_tables, get_session, engine
-from models import User, Pet
+from models import User, Pet,StudyPlan, StudySession, DailyActivity
 from security import (
     get_password_hash, 
     verify_password, 
@@ -334,7 +334,7 @@ async def complete_tooltip_tour(
 
 @app.get("/users/me/dashboard", response_model=DashboardResponse, status_code=status.HTTP_200_OK)
 async def get_dashboard(
-    current_user: User = Depends(get_current_user), # 🔒 Requires valid JWT
+    current_user: User = Depends(get_current_user), 
     session: Session = Depends(get_session)
 ):
     
@@ -347,15 +347,32 @@ async def get_dashboard(
     else:
         greeting = "Good evening"
 
-    # Grab just the first name from the user's full name string
-    first_name = current_user.name.split()[0] if current_user.name else "Student" [cite: 35]
+    first_name = current_user.name.split()[0] if current_user.name else "Student"
 
     user_info = UserDashboardInfo(
         first_name=first_name, 
         is_first_session=current_user.is_first_session 
     )
 
-    # 2. Fetch actual Pet Data from the database [cite: 33, 35]
+    # 2. Calculate the Real XP History for the last 7 days
+    today = datetime.now().date()
+    # Generate a list of strings for the last 7 days: ['2026-04-09', '2026-04-10', ..., '2026-04-15']
+    last_7_days = [(today - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
+    
+    # Query the database for any activity on these specific dates
+    statement = select(DailyActivity).where(
+        DailyActivity.user_id == current_user.id,
+        DailyActivity.date.in_(last_7_days)
+    )
+    activities = session.exec(statement).all()
+    
+    # Map the results: { "2026-04-14": 150, "2026-04-15": 200 }
+    xp_map = {activity.date: activity.xp_earned for activity in activities}
+    
+    # Build the final array, defaulting to 0 if they didn't study that day
+    real_xp_history = [xp_map.get(day, 0) for day in last_7_days]
+
+    # 3. Fetch actual Pet Data from the database
     statement = select(Pet).where(Pet.user_id == current_user.id)
     pet = session.exec(statement).first()
     
@@ -365,31 +382,26 @@ async def get_dashboard(
             type=pet.pet_type, 
             level=pet.level, 
             xp=pet.xp, 
-            xp_to_next=1200, # Hardcoded until we build the leveling system
-            mood="happy"
+            xp_to_next=1200, 
+            mood="happy",
+            xp_history=real_xp_history # <-- Real database data!
         )
     else:
-        # Fallback just in case they bypassed onboarding
         pet_info = PetDashboardInfo(
-            name="Nova", type="nova", level=1, xp=0, xp_to_next=1200, mood="happy"
+            name="Nova", type="nova", level=1, xp=0, xp_to_next=1200, mood="happy",
+            xp_history=[0, 0, 0, 0, 0, 0, 0] 
         )
 
-    # 3. Streak Logic (Hardcoded for now until we build the streak tracker) [cite: 35]
-    streak_info = StreakInfo(
-        days=0,
-        active_today=False
-    )
+    streak_info = StreakInfo(days=0, active_today=False)
 
-    # 4. Return the assembled payload 
     return DashboardResponse(
         user=user_info,
         pet=pet_info,
-        quests=[], # Empty list triggers "Join a study group" empty state [cite: 61]
-        today_plan=[], # Empty list triggers "No plan yet" empty state [cite: 59]
+        quests=[], 
+        today_plan=[], 
         streak=streak_info,
         greeting=greeting
     )
-
 
 # ==========================================
 # STUDY PLAN ROUTES (SCREEN 9)
