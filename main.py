@@ -356,6 +356,8 @@ async def get_dashboard(
 
     # 2. Calculate the Real XP History for the last 7 days
     today = datetime.now().date()
+    today_str = today.isoformat() # Used later for today's plan
+    
     # Generate a list of strings for the last 7 days: ['2026-04-09', '2026-04-10', ..., '2026-04-15']
     last_7_days = [(today - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
     
@@ -384,7 +386,7 @@ async def get_dashboard(
             xp=pet.xp, 
             xp_to_next=1200, 
             mood="happy",
-            xp_history=real_xp_history # <-- Real database data!
+            xp_history=real_xp_history 
         )
     else:
         pet_info = PetDashboardInfo(
@@ -392,17 +394,39 @@ async def get_dashboard(
             xp_history=[0, 0, 0, 0, 0, 0, 0] 
         )
 
+    # ==========================================
+    # 4. Fetch Real "Today's Plan" Data
+    # ==========================================
+    # Query the database for any sessions scheduled for exactly today
+    today_sessions_query = select(StudySession).where(
+        StudySession.user_id == current_user.id,
+        StudySession.date == today_str,
+        StudySession.completed == False # Only show unfinished tasks
+    ).limit(4) 
+    
+    today_sessions = session.exec(today_sessions_query).all()
+    
+    # Format them securely using the Pydantic schema
+    real_today_plan = [
+        TodayPlanSession(
+            id=str(s.id),
+            subject=s.subject,
+            duration_mins=s.duration_mins,
+            mode=s.mode
+        ) for s in today_sessions
+    ]
+
+    # 5. Streak Logic (Hardcoded for now)
     streak_info = StreakInfo(days=0, active_today=False)
 
     return DashboardResponse(
         user=user_info,
         pet=pet_info,
         quests=[], 
-        today_plan=[], 
+        today_plan=real_today_plan, # <-- NOW PASSING THE REAL DATABASE SESSIONS!
         streak=streak_info,
         greeting=greeting
     )
-
 # ==========================================
 # STUDY PLAN ROUTES (SCREEN 9)
 # ==========================================
