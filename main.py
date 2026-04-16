@@ -22,7 +22,7 @@ from schemas import (
     TokenRefreshRequest, ForgotPasswordRequest, ResetPasswordRequest, FirstSessionUpdate,
     DashboardResponse, UserDashboardInfo, PetDashboardInfo, StreakInfo,
     PlanResponse, PlanGenerateRequest, SessionUpdateRequest, PlanApproveRequest,
-    SolveRequest, SolveResponse, SolveFeedbackRequest
+    SolveRequest, SolveResponse, SolveFeedbackRequest, PlanGoal
 )
 from ai_service import generate_deepseek_solution, generate_deepseek_study_plan
 from models import StudyPlan, StudySession
