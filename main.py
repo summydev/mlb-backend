@@ -23,7 +23,8 @@ from schemas import (
     TokenRefreshRequest, ForgotPasswordRequest, ResetPasswordRequest, FirstSessionUpdate,
     DashboardResponse, UserDashboardInfo, PetDashboardInfo, StreakInfo,
     PlanResponse, PlanGenerateRequest, SessionUpdateRequest, PlanApproveRequest,
-    SolveRequest, SolveResponse, SolveFeedbackRequest, PlanGoal, TodayPlanSession # <-- Added TodayPlanSession
+    SolveRequest, SolveResponse, SolveFeedbackRequest, PlanGoal, TodayPlanSession,
+     PlanStats, WeekDay, SessionDetail # <-- Added TodayPlanSession
 )
 
 # AI Service
@@ -261,9 +262,76 @@ async def get_dashboard(
 # STUDY PLAN ROUTES (SCREEN 9)
 # ==========================================
 
+
 @app.get("/users/me/plan", response_model=Optional[PlanResponse], status_code=status.HTTP_200_OK)
-async def get_study_plan(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    return None # Triggers Goal Setup UI
+async def get_study_plan(
+    current_user: User = Depends(get_current_user), 
+    session: Session = Depends(get_session)
+):
+    # 1. Fetch the user's most recently generated plan
+    statement = select(StudyPlan).where(StudyPlan.user_id == current_user.id).order_by(StudyPlan.id.desc())
+    db_plan = session.exec(statement).first()
+
+    # If they have no plan in the database, return None to show the Goal Setup UI
+    if not db_plan:
+        return None 
+
+    # 2. Fetch all study sessions linked to this plan
+    sessions_statement = select(StudySession).where(StudySession.plan_id == db_plan.id)
+    db_sessions = session.exec(sessions_statement).all()
+
+    # 3. Calculate the stats required by the UI
+    today = datetime.now().date()
+    days_remaining = (db_plan.deadline - today).days
+    
+    # Calculate a rough daily target based on the generated sessions
+    total_duration = sum(s.duration_mins for s in db_sessions)
+    daily_target = total_duration // len(db_sessions) if db_sessions else 60
+
+    stats = PlanStats(
+        days_remaining=days_remaining if days_remaining > 0 else 0,
+        daily_target_mins=daily_target,
+        topics_count=len(db_sessions)
+    )
+
+    # 4. Construct the 7-day week array for the UI day-strip
+    week = []
+    for i in range(7):
+        current_date = today + timedelta(days=i)
+        date_str = current_date.isoformat()
+        
+        # Check if there is a session scheduled for this specific date
+        day_session = next((s for s in db_sessions if s.date == date_str), None)
+        
+        week.append(WeekDay(
+            date=date_str,
+            day_label=current_date.strftime("%a").upper(), # e.g., "MON", "TUE"
+            has_session=bool(day_session),
+            session_type="study" if day_session else "rest"
+        ))
+
+    # 5. Format the sessions for the Flutter app
+    formatted_sessions = [
+        SessionDetail(
+            id=str(s.id),
+            date=s.date,
+            time=s.time or "16:00",
+            subject=s.subject,
+            duration_mins=s.duration_mins,
+            mode=s.mode,
+            priority=s.priority,
+            completed=s.completed
+        ) for s in db_sessions
+    ]
+
+    # 6. Return the fully assembled plan
+    return PlanResponse(
+        goal=PlanGoal(subject=db_plan.subject, deadline=db_plan.deadline),
+        stats=stats,
+        week=week,
+        sessions=formatted_sessions,
+        nudge=None
+    )
 
 @app.post("/users/me/plan/generate", response_model=PlanResponse, status_code=status.HTTP_200_OK)
 async def generate_study_plan(
