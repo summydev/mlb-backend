@@ -29,6 +29,9 @@ from schemas import (
 
 # AI Service
 from ai_service import generate_deepseek_solution, generate_deepseek_study_plan
+from routers import study
+
+# ... your other app setup ...
 
 
 # This ensures the database tables are created when the app starts
@@ -39,6 +42,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="myLB Auth API", version="1.0", lifespan=lifespan)
 
+app.include_router(study.router)
 # Allow Flutter app to communicate with the API
 app.add_middleware(
     CORSMiddleware,
