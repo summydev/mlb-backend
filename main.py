@@ -29,7 +29,7 @@ from schemas import (
 
 # AI Service
 from ai_service import generate_deepseek_solution, generate_deepseek_study_plan
-from routers import study
+from routers import study, notes
 
 # ... your other app setup ...
 
@@ -43,6 +43,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="myLB Auth API", version="1.0", lifespan=lifespan)
 
 app.include_router(study.router)
+app.include_router(notes.router) #
 # Allow Flutter app to communicate with the API
 app.add_middleware(
     CORSMiddleware,

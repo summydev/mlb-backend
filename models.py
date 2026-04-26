@@ -32,6 +32,7 @@ class User(SQLModel, table=True):
     quests: List["Quest"] = Relationship(back_populates="user")
     study_plans: List["StudyPlan"] = Relationship(back_populates="user")
     study_sets: List["StudySet"] = Relationship(back_populates="user")
+    notes: List["Note"] = Relationship(back_populates="user")
 
 class Pet(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -120,6 +121,8 @@ class StudySet(SQLModel, table=True):
 class Flashcard(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     study_set_id: int = Field(foreign_key="studyset.id")
+
+    note_id: Optional[int] = Field(default=None, foreign_key="note.id")
     
     question: str = Field(max_length=200)
     answer: str = Field(max_length=400)
@@ -127,9 +130,11 @@ class Flashcard(SQLModel, table=True):
     difficulty: DifficultyLevel = Field(default=DifficultyLevel.medium)
     is_weak: bool = Field(default=False)
 
-    # Relationships
     study_set: Optional["StudySet"] = Relationship(back_populates="flashcards")
     feynman_sessions: List["FeynmanSession"] = Relationship(back_populates="flashcard")
+    
+    # Add this relationship!
+    note: Optional["Note"] = Relationship(back_populates="flashcards")
 
 class FeynmanSession(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -150,3 +155,29 @@ class FeynmanSession(SQLModel, table=True):
     # Relationships
     study_set: Optional["StudySet"] = Relationship(back_populates="feynman_sessions")
     flashcard: Optional["Flashcard"] = Relationship(back_populates="feynman_sessions")
+
+class Note(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    
+    # Core Content
+    title: str = Field(default="Untitled note", max_length=60)
+    subject: str
+    content_text: str = Field(default="")
+    content_html: Optional[str] = Field(default=None) # Saves the rich text formatting
+    
+    # Metadata (Automatically calculated)
+    word_count: int = Field(default=0)
+    card_count: int = Field(default=0)
+    weak_card_count: int = Field(default=0)
+    has_canvas: bool = Field(default=False)
+    snippet: str = Field(default="", max_length=80) # First 80 chars for the Library card
+    is_public: bool = Field(default=False)
+    
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    user: Optional["User"] = Relationship(back_populates="notes")
+    flashcards: List["Flashcard"] = Relationship(back_populates="note", cascade_delete=True)
