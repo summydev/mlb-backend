@@ -1,3 +1,4 @@
+import uuid
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List
 from datetime import date, datetime
@@ -11,6 +12,16 @@ class DifficultyLevel(str, Enum):
     easy = "easy"
     medium = "medium"
     hard = "hard"
+
+class CanvasSourceType(str, Enum):
+    notes = "notes"
+    upload = "upload"
+    manual = "manual"
+
+class NodeSize(str, Enum):
+    small = "small"
+    medium = "medium"
+    large = "large"
 
 # ==========================================
 # USER & PET MODELS (ONBOARDING)
@@ -27,12 +38,13 @@ class User(SQLModel, table=True):
     study_goal: Optional[str] = None
     is_first_session: bool = True
     
-    # Relationships (Links to other tables)
+    # Relationships
     pets: List["Pet"] = Relationship(back_populates="user")
     quests: List["Quest"] = Relationship(back_populates="user")
     study_plans: List["StudyPlan"] = Relationship(back_populates="user")
     study_sets: List["StudySet"] = Relationship(back_populates="user")
     notes: List["Note"] = Relationship(back_populates="user")
+    canvases: List["Canvas"] = Relationship(back_populates="user")
 
 class Pet(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -43,11 +55,11 @@ class Pet(SQLModel, table=True):
     level: int = 1
     xp: int = 0
     
-    # Relationship back to the User
+    # Relationships
     user: Optional["User"] = Relationship(back_populates="pets")
 
 # ==========================================
-# DASHBOARD & STUDY PLAN MODELS (SCREEN 3 & 9)
+# DASHBOARD & STUDY PLAN MODELS
 # ==========================================
 
 class Quest(SQLModel, table=True):
@@ -60,7 +72,7 @@ class Quest(SQLModel, table=True):
     target: int
     members_count: Optional[int] = None
     
-    # Relationship back to the User
+    # Relationships
     user: Optional["User"] = Relationship(back_populates="quests")
 
 class StudyPlan(SQLModel, table=True):
@@ -80,7 +92,7 @@ class StudySession(SQLModel, table=True):
     plan_id: int = Field(foreign_key="studyplan.id")
     user_id: int = Field(foreign_key="user.id")
     
-    date: str # Stored as a string YYYY-MM-DD for easy API formatting
+    date: str # Stored as a string YYYY-MM-DD
     time: Optional[str] = None # e.g., "14:00"
     subject: str
     duration_mins: int
@@ -89,18 +101,18 @@ class StudySession(SQLModel, table=True):
     completed: bool = False
     skipped: bool = False
     
-    # Relationship back to the StudyPlan
+    # Relationships
     plan: Optional["StudyPlan"] = Relationship(back_populates="sessions")
 
 class DailyActivity(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
     
-    date: str # Stored as YYYY-MM-DD so it's easy to query
+    date: str # Stored as YYYY-MM-DD
     xp_earned: int = 0
 
 # ==========================================
-# STUDY TAB MODELS (SCREEN 6A, 6B, 7)
+# STUDY TAB & NOTES MODELS
 # ==========================================
 
 class StudySet(SQLModel, table=True):
@@ -121,7 +133,6 @@ class StudySet(SQLModel, table=True):
 class Flashcard(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     study_set_id: int = Field(foreign_key="studyset.id")
-
     note_id: Optional[int] = Field(default=None, foreign_key="note.id")
     
     question: str = Field(max_length=200)
@@ -130,11 +141,11 @@ class Flashcard(SQLModel, table=True):
     difficulty: DifficultyLevel = Field(default=DifficultyLevel.medium)
     is_weak: bool = Field(default=False)
 
+    # Relationships
     study_set: Optional["StudySet"] = Relationship(back_populates="flashcards")
-    feynman_sessions: List["FeynmanSession"] = Relationship(back_populates="flashcard")
-    
-    # Add this relationship!
     note: Optional["Note"] = Relationship(back_populates="flashcards")
+    feynman_sessions: List["FeynmanSession"] = Relationship(back_populates="flashcard")
+    canvas_nodes: List["CanvasNode"] = Relationship(back_populates="flashcard")
 
 class FeynmanSession(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -142,11 +153,9 @@ class FeynmanSession(SQLModel, table=True):
     study_set_id: int = Field(foreign_key="studyset.id")
     card_id: int = Field(foreign_key="flashcard.id")
     
-    # State tracking
     comprehension_score: int = Field(default=0, ge=0, le=100)
     is_complete: bool = Field(default=False)
     
-    # Storing the AI's structural outputs as JSON strings 
     gaps_identified: str = Field(default="[]") 
     strong_points: str = Field(default="[]")
     
@@ -160,24 +169,97 @@ class Note(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
     
-    # Core Content
     title: str = Field(default="Untitled note", max_length=60)
     subject: str
     content_text: str = Field(default="")
-    content_html: Optional[str] = Field(default=None) # Saves the rich text formatting
+    content_html: Optional[str] = Field(default=None)
     
-    # Metadata (Automatically calculated)
     word_count: int = Field(default=0)
     card_count: int = Field(default=0)
     weak_card_count: int = Field(default=0)
     has_canvas: bool = Field(default=False)
-    snippet: str = Field(default="", max_length=80) # First 80 chars for the Library card
+    snippet: str = Field(default="", max_length=80)
     is_public: bool = Field(default=False)
     
-    # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationships
     user: Optional["User"] = Relationship(back_populates="notes")
     flashcards: List["Flashcard"] = Relationship(back_populates="note", cascade_delete=True)
+    canvases: List["Canvas"] = Relationship(back_populates="note")
+
+# ==========================================
+# CANVAS MODELS (INFINITE CANVAS TAB)
+# ==========================================
+
+class Canvas(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    
+    name: str
+    subject: str
+    node_count: int = Field(default=0)
+    weak_node_count: int = Field(default=0)
+    thumbnail_url: Optional[str] = Field(default=None)
+    
+    source_type: CanvasSourceType = Field(default=CanvasSourceType.manual)
+    source_id: Optional[int] = Field(default=None, foreign_key="note.id")
+    
+    last_studied_at: Optional[datetime] = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    is_public: bool = Field(default=False)
+    
+    # Relationships
+    user: Optional["User"] = Relationship(back_populates="canvases")
+    note: Optional["Note"] = Relationship(back_populates="canvases")
+    nodes: List["CanvasNode"] = Relationship(back_populates="canvas", cascade_delete=True)
+    connections: List["CanvasConnection"] = Relationship(back_populates="canvas", cascade_delete=True)
+
+class CanvasNode(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    canvas_id: uuid.UUID = Field(foreign_key="canvas.id")
+    
+    label: str = Field(max_length=40)
+    x: float
+    y: float
+    size: NodeSize = Field(default=NodeSize.medium)
+    is_hero: bool = Field(default=False)
+    is_weak: bool = Field(default=False)
+    definition: Optional[str] = Field(default=None)
+    
+    card_id: Optional[int] = Field(default=None, foreign_key="flashcard.id")
+    
+    # Relationships
+    canvas: Optional["Canvas"] = Relationship(back_populates="nodes")
+    flashcard: Optional["Flashcard"] = Relationship(back_populates="canvas_nodes")
+    
+    # We use sa_relationship_kwargs to tell SQLAlchemy exactly which foreign keys to use
+    # to prevent ambiguity errors when building the connection graph
+    outgoing_connections: List["CanvasConnection"] = Relationship(
+        back_populates="from_node",
+        sa_relationship_kwargs={"foreign_keys": "[CanvasConnection.from_node_id]", "cascade": "all, delete-orphan"}
+    )
+    incoming_connections: List["CanvasConnection"] = Relationship(
+        back_populates="to_node",
+        sa_relationship_kwargs={"foreign_keys": "[CanvasConnection.to_node_id]", "cascade": "all, delete-orphan"}
+    )
+
+class CanvasConnection(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    canvas_id: uuid.UUID = Field(foreign_key="canvas.id")
+    from_node_id: uuid.UUID = Field(foreign_key="canvasnode.id")
+    to_node_id: uuid.UUID = Field(foreign_key="canvasnode.id")
+    
+    label: Optional[str] = Field(default=None)
+    
+    # Relationships
+    canvas: Optional["Canvas"] = Relationship(back_populates="connections")
+    from_node: Optional["CanvasNode"] = Relationship(
+        back_populates="outgoing_connections",
+        sa_relationship_kwargs={"foreign_keys": "[CanvasConnection.from_node_id]"}
+    )
+    to_node: Optional["CanvasNode"] = Relationship(
+        back_populates="incoming_connections",
+        sa_relationship_kwargs={"foreign_keys": "[CanvasConnection.to_node_id]"}
+    )
