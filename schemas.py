@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Literal, List, Optional
-from datetime import date
- 
+from datetime import date, datetime
+from uuid import UUID
  
 # ==========================================
 # AUTH & USER SETTINGS SCHEMAS
@@ -148,7 +148,6 @@ class PlanApproveRequest(BaseModel):
     approved: bool
 
 
-
  
 # ==========================================
 # AI SOLVE SCHEMAS (SCREEN 10)
@@ -160,7 +159,7 @@ class SolveRequest(BaseModel):
 
 class HighlightTerm(BaseModel):
     term: str
-    color: Literal["mint", "peach"] # Spec says mint = #3CFFC8, peach = #FF8A65 [cite: 159]
+    color: Literal["mint", "peach"] # Spec says mint = #3CFFC8, peach = #FF8A65
 
 class SolutionStep(BaseModel):
     step_number: int
@@ -176,8 +175,78 @@ class SolveResponse(BaseModel):
     solution_id: str
     steps: List[SolutionStep]
     canvas_links: List[CanvasLink]
-    confidence_score: float # Float 0-1. App shows warning if < 0.75 [cite: 149]
+    confidence_score: float # Float 0-1. App shows warning if < 0.75
 
 class SolveFeedbackRequest(BaseModel):
     helpful: bool
     flag_reason: Optional[str] = None
+
+# ==========================================
+# CANVAS TAB SCHEMAS (SCREEN 5)
+# ==========================================
+# --- Requests ---
+class NodeCreate(BaseModel):
+    label: str = Field(..., max_length=40)
+    x: float
+    y: float
+    size: Literal["small", "medium", "large"] = "medium"
+    is_hero: bool = False
+    is_weak: bool = False
+
+class NodeUpdate(BaseModel):
+    label: Optional[str] = Field(None, max_length=40)
+    x: Optional[float] = None
+    y: Optional[float] = None
+    size: Optional[Literal["small", "medium", "large"]] = None
+    is_weak: Optional[bool] = None
+
+class ConnectionCreate(BaseModel):
+    from_node_id: UUID
+    to_node_id: UUID
+    label: Optional[str] = None
+
+class CanvasCreate(BaseModel):
+    name: str
+    subject: str
+    source_type: Literal["notes", "upload", "manual"] = "manual"
+    source_id: Optional[int] = None # Links to Note ID if generated from notes
+
+# --- Responses ---
+class NodeResponse(BaseModel):
+    id: UUID
+    label: str
+    x: float
+    y: float
+    size: Literal["small", "medium", "large"]
+    is_hero: bool
+    is_weak: bool
+    definition: Optional[str] = None
+    card_id: Optional[int] = None
+
+class ConnectionResponse(BaseModel):
+    id: UUID
+    from_node_id: UUID
+    to_node_id: UUID
+    label: Optional[str] = None
+
+class CanvasResponse(BaseModel):
+    id: UUID
+    name: str
+    subject: str
+    node_count: int
+    weak_node_count: int
+    thumbnail_url: Optional[str] = None
+    source_type: str
+    source_id: Optional[int] = None
+    last_studied_at: Optional[datetime] = None
+    created_at: datetime
+    is_public: bool
+    
+    # These arrays will be populated when viewing the Infinite Canvas
+    nodes: List[NodeResponse] = []
+    connections: List[ConnectionResponse] = []
+
+class CanvasStatusResponse(BaseModel):
+    status: Literal["ready", "processing", "failed"]
+    node_count: int
+    nodes: List[NodeResponse] = []
