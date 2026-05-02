@@ -162,13 +162,13 @@ async def reset_password(request: ResetPasswordRequest, session: Session = Depen
 
 
 
-@app.get("/fix-db-schema")
-async def fix_database_schema(session: Session = Depends(get_session)):
+@app.get("/fix-db")
+def fix_database_schema(db: Session = Depends(get_session)):
     try:
-        # This tells PostgreSQL to add the missing column
-        session.exec(text('ALTER TABLE flashcard ADD COLUMN note_id INTEGER REFERENCES note(id);'))
-        session.commit()
-        return {"message": "Database schema updated successfully! You can delete this endpoint now."}
+        # This forcefully adds the missing column to your live database
+        db.exec(text('ALTER TABLE flashcard ADD COLUMN IF NOT EXISTS note_id INTEGER REFERENCES note(id);'))
+        db.commit()
+        return {"message": "Success! The note_id column has been added to the flashcard table."}
     except Exception as e:
         return {"error": str(e)}
 
