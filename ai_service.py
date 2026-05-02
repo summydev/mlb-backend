@@ -1,14 +1,15 @@
-from openai import AsyncOpenAI
+# ai_service.py
 import json
 import uuid
 import os 
 from dotenv import load_dotenv
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from openai import AsyncOpenAI
 
 # This tells Python to look for the .env file and load it
 load_dotenv()
+
 # Initialize the client pointing to DeepSeek's API
-# Make sure to set DEEPSEEK_API_KEY in your Render environment variables!
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "your-deepseek-api-key-here")
 
 client = AsyncOpenAI(
@@ -16,6 +17,9 @@ client = AsyncOpenAI(
     base_url="https://api.deepseek.com" # Overriding the base URL to DeepSeek
 )
 
+# ==========================================
+# 1. AI SOLVE ENGINE (Screen 10)
+# ==========================================
 async def generate_deepseek_solution(question_text: str) -> dict:
     """
     Sends the user's question to DeepSeek and forces it to return 
@@ -33,7 +37,7 @@ async def generate_deepseek_solution(question_text: str) -> dict:
           "step_number": 1,
           "text": "Your detailed explanation for this step...",
           "highlight_terms": [
-            {"term": "exact word to highlight", "color": "mint" | "peach"}
+            {"term": "exact word to highlight", "color": "mint"}
           ]
         }
       ],
@@ -44,6 +48,7 @@ async def generate_deepseek_solution(question_text: str) -> dict:
     - Use 'mint' for positive concepts, formulas, or correct answers.
     - Use 'peach' for warnings, common mistakes, or critical exceptions.
     - Do not highlight whole sentences, only key terms.
+    - If there are no terms to highlight, leave the array empty [].
     """
 
     try:
@@ -63,14 +68,19 @@ async def generate_deepseek_solution(question_text: str) -> dict:
         ai_data["solution_id"] = f"sol_{uuid.uuid4().hex[:8]}"
         ai_data["canvas_links"] = [] 
         
+        # Fallback to ensure confidence score exists
+        if "confidence_score" not in ai_data:
+            ai_data["confidence_score"] = 0.90
+            
         return ai_data
 
     except Exception as e:
-        print(f"DeepSeek API Error: {e}")
+        print(f"DeepSeek AI Solve Error: {e}")
         return None
 
-
-# Add this below your existing generate_deepseek_solution function
+# ==========================================
+# 2. AI STUDY PLAN GENERATOR (Screen 9)
+# ==========================================
 async def generate_deepseek_study_plan(goal: str, target_date: date, days_remaining: int) -> dict:
     """
     Prompts DeepSeek to generate a structured 7-day study schedule.
@@ -90,29 +100,32 @@ async def generate_deepseek_study_plan(goal: str, target_date: date, days_remain
     {{
       "stats": {{
         "days_remaining": {days_remaining},
-        "daily_target_mins": <calculate reasonable integer, e.g., 60>,
-        "topics_count": <estimate number of topics to cover>
+        "daily_target_mins": 60,
+        "topics_count": 5
       }},
       "week": [
         {{
           "date": "YYYY-MM-DD",
           "day_label": "MON", 
-          "has_session": true/false,
-          "session_type": "study" | "review" | "rest"
-        }} // Generate EXACTLY 7 items for the next 7 days
+          "has_session": true,
+          "session_type": "study"
+        }}
       ],
       "sessions": [
         {{
           "date": "YYYY-MM-DD",
           "time": "16:00",
           "subject": "Specific topic name",
-          "duration_mins": <integer>,
-          "mode": "flashcard" | "feynman" | "review",
-          "priority": "normal" | "high" | "weak_area"
-        }} // Generate ONLY the sessions for days where has_session is true
+          "duration_mins": 30,
+          "mode": "flashcard",
+          "priority": "normal"
+        }}
       ],
       "nudge": null 
     }}
+    
+    Rules for 'week': Generate EXACTLY 7 items for the next 7 days. session_type must be "study", "review", or "rest".
+    Rules for 'sessions': Generate ONLY the sessions for days where has_session is true. mode must be "flashcard", "feynman", or "review". priority must be "normal", "high", or "weak_area".
     """
 
     try:
@@ -120,7 +133,7 @@ async def generate_deepseek_study_plan(goal: str, target_date: date, days_remain
             model="deepseek-chat",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": "Generate my study plan."}
+                {"role": "user", "content": f"Generate my 7-day study plan for {goal}."}
             ],
             response_format={"type": "json_object"} 
         )
@@ -129,5 +142,5 @@ async def generate_deepseek_study_plan(goal: str, target_date: date, days_remain
         return plan_data
 
     except Exception as e:
-        print(f"DeepSeek API Error: {e}")
+        print(f"DeepSeek AI Plan Error: {e}")
         return None

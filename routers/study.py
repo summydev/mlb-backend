@@ -1,3 +1,4 @@
+# routers/study.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from typing import List, Optional
@@ -6,17 +7,21 @@ from datetime import datetime, timedelta
 import uuid
 import json
 from openai import AsyncOpenAI
-import os  # <-- Add this
+import os
 from dotenv import load_dotenv
 
-# Database, Models, and Real Authentication!
+# Database, Models, and Authentication
 from database import get_session
 from security import get_current_user
 from models import User, StudySet, Flashcard, FeynmanSession, DailyActivity, Pet
 
-router = APIRouter(tags=["Study Tab"])
+load_dotenv() # Ensure env variables are loaded
+
+router = APIRouter(prefix="/study", tags=["Study Tab"])
+
+# Initialize DeepSeek Client safely
 client = AsyncOpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"), # Keep your real key here (use env variables in production!)
+    api_key=os.getenv("DEEPSEEK_API_KEY", "fallback-key-for-dev"),
     base_url="https://api.deepseek.com"
 )
 
@@ -26,7 +31,7 @@ client = AsyncOpenAI(
 
 class SwipeResponse(BaseModel):
     card_id: int
-    response: str 
+    response: str # "correct" or "incorrect"
     response_time_ms: Optional[int] = None
 
 class FlashcardCompleteRequest(BaseModel):
@@ -50,16 +55,16 @@ class FeynmanCompleteRequest(BaseModel):
 # 6A: MODE SELECTION ENDPOINTS
 # ==========================================
 
-@router.get("/users/me/study-sets")
+@router.get("/sets")
 async def get_user_study_sets(
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
 ):
     """Fetches all study sets belonging strictly to the authenticated user."""
-    statement = select(StudySet).where(StudySet.user_id == current_user.id)
+    statement = select(StudySet).where(StudySet.user_id == current_user.id).order_by(StudySet.last_studied.desc())
     return db.exec(statement).all()
 
-@router.get("/study-sets/{set_id}")
+@router.get("/sets/{set_id}")
 async def get_study_set(
     set_id: int, 
     current_user: User = Depends(get_current_user), 
@@ -74,7 +79,7 @@ async def get_study_set(
 # 6B: STANDARD FLASHCARDS ENDPOINTS
 # ==========================================
 
-@router.get("/study-sets/{set_id}/cards")
+@router.get("/sets/{set_id}/cards")
 async def get_flashcards(
     set_id: int, 
     order: str = "spaced_repetition", 
@@ -89,10 +94,13 @@ async def get_flashcards(
 
     query = select(Flashcard).where(Flashcard.study_set_id == set_id)
     
+    # Simple spaced repetition: surface weak cards first
     if order == "spaced_repetition":
         query = query.order_by(Flashcard.is_weak.desc())
         
     cards = db.exec(query.limit(limit)).all()
+    
+    # Generate a stateless session ID for the frontend to track this run
     session_id = str(uuid.uuid4())
 
     return {
@@ -108,6 +116,7 @@ async def record_swipe(
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
 ):
+    """Records a left/right swipe on a flashcard to update its weak status."""
     card = db.get(Flashcard, payload.card_id)
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
@@ -115,19 +124,17 @@ async def record_swipe(
     if payload.response == "correct":
         card.is_weak = False
         xp_earned = 5  
-        next_review = datetime.utcnow() + timedelta(days=3)
     elif payload.response == "incorrect":
         card.is_weak = True
         xp_earned = 1  
-        next_review = datetime.utcnow() + timedelta(days=1)
     else:
-        raise HTTPException(status_code=400, detail="Invalid response type")
+        raise HTTPException(status_code=400, detail="Invalid response type. Use 'correct' or 'incorrect'.")
 
     db.add(card)
     db.commit()
 
     return {
-        "next_review_date": next_review.isoformat(),
+        "is_weak": card.is_weak,
         "xp_earned": xp_earned
     }
 
@@ -138,6 +145,7 @@ async def complete_flashcard_session(
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
 ):
+    """Calculates XP and updates the user's daily streak."""
     base_xp = (payload.cards_correct * 5) + (payload.cards_incorrect * 1)
     pet_xp_awarded = int(base_xp * 0.5) 
 
@@ -178,7 +186,7 @@ async def complete_flashcard_session(
 # 7: FEYNMAN MODE (AI CHAT) ENDPOINTS
 # ==========================================
 
-@router.post("/sessions/feynman/start")
+@router.post("/feynman/start")
 async def start_feynman_session(
     payload: FeynmanStartRequest, 
     current_user: User = Depends(get_current_user), 
@@ -188,7 +196,6 @@ async def start_feynman_session(
     if not card:
         raise HTTPException(status_code=404, detail="Flashcard not found")
 
-    # The mock is GONE! Using the real logged-in user ID
     feynman_session = FeynmanSession(
         user_id=current_user.id,
         study_set_id=payload.set_id,
@@ -199,7 +206,7 @@ async def start_feynman_session(
     db.commit()
     db.refresh(feynman_session)
 
-    first_prompt = f"Explain {card.question} as if I've never heard of it before. Break it down simply!"
+    first_prompt = f"Explain '{card.question}' as if I've never heard of it before. Break it down simply!"
 
     return {
         "session_id": feynman_session.id,
@@ -207,7 +214,7 @@ async def start_feynman_session(
         "card_concept": card.subject
     }
 
-@router.post("/sessions/feynman/{session_id}/message")
+@router.post("/feynman/{session_id}/message")
 async def feynman_chat_message(
     session_id: int, 
     payload: FeynmanMessageRequest, 
@@ -241,44 +248,52 @@ async def feynman_chat_message(
     6. Update the arrays of strong_points and gaps_identified.
     7. Set 'session_complete' to true ONLY IF the score is > 90 AND they have covered all core concepts.
 
-    YOU MUST RESPOND ONLY IN VALID JSON FORMAT matching this structure:
+    YOU MUST RESPOND ONLY IN VALID JSON FORMAT matching this structure exactly:
     {{
       "ai_reply": "Your conversational reply here",
-      "comprehension_score": int,
-      "score_delta": int,
-      "session_complete": bool,
-      "gaps_identified": ["gap 1", "gap 2"],
+      "comprehension_score": 85,
+      "score_delta": 10,
+      "session_complete": false,
+      "gaps_identified": ["gap 1"],
       "strong_points": ["point 1"]
     }}
     """
 
-    response = await client.chat.completions.create(
-        model="deepseek-chat",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input}
-        ],
-        response_format={"type": "json_object"}
-    )
+    try:
+        response = await client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_input}
+            ],
+            response_format={"type": "json_object"}
+        )
 
-    ai_data = json.loads(response.choices[0].message.content)
+        ai_data = json.loads(response.choices[0].message.content)
+        
+        # Safely extract with fallbacks in case the LLM misses a key
+        comp_score = ai_data.get("comprehension_score", feynman_session.comprehension_score)
+        
+        feynman_session.comprehension_score = comp_score
+        feynman_session.is_complete = ai_data.get("session_complete", False)
+        feynman_session.gaps_identified = json.dumps(ai_data.get("gaps_identified", []))
+        feynman_session.strong_points = json.dumps(ai_data.get("strong_points", []))
+        
+        db.add(feynman_session)
+        db.commit()
 
-    feynman_session.comprehension_score = ai_data["comprehension_score"]
-    feynman_session.is_complete = ai_data["session_complete"]
-    feynman_session.gaps_identified = json.dumps(ai_data["gaps_identified"])
-    feynman_session.strong_points = json.dumps(ai_data["strong_points"])
-    
-    db.add(feynman_session)
-    db.commit()
+        return {
+            "ai_reply": ai_data.get("ai_reply", "I see. Could you elaborate on that?"),
+            "comprehension_score": comp_score,
+            "score_delta": ai_data.get("score_delta", 0),
+            "session_complete": feynman_session.is_complete
+        }
 
-    return {
-        "ai_reply": ai_data["ai_reply"],
-        "comprehension_score": ai_data["comprehension_score"],
-        "score_delta": ai_data["score_delta"],
-        "session_complete": ai_data["session_complete"]
-    }
+    except Exception as e:
+        print(f"DeepSeek Feynman Error: {e}")
+        raise HTTPException(status_code=500, detail="AI failed to process the response. Please try again.")
 
-@router.get("/sessions/feynman/{session_id}/score")
+@router.get("/feynman/{session_id}/score")
 async def get_feynman_score(
     session_id: int, 
     current_user: User = Depends(get_current_user), 
@@ -288,13 +303,20 @@ async def get_feynman_score(
     if not session or session.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
         
+    # Safely load the JSON strings back into lists
+    try:
+        gaps = json.loads(session.gaps_identified) if session.gaps_identified else []
+        strengths = json.loads(session.strong_points) if session.strong_points else []
+    except json.JSONDecodeError:
+        gaps, strengths = [], []
+
     return {
         "comprehension_score": session.comprehension_score,
-        "gaps_identified": json.loads(session.gaps_identified),
-        "strong_points": json.loads(session.strong_points)
+        "gaps_identified": gaps,
+        "strong_points": strengths
     }
 
-@router.post("/sessions/feynman/{session_id}/complete")
+@router.post("/feynman/{session_id}/complete")
 async def complete_feynman_session(
     session_id: int, 
     payload: FeynmanCompleteRequest, 

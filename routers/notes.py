@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+# routers/notes.py
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlmodel import Session, select, func
 from typing import List, Optional
 from pydantic import BaseModel
@@ -9,19 +10,20 @@ from openai import AsyncOpenAI
 
 # Database, Models, and Authentication
 from database import get_session
-from security import get_current_user
+# Assuming you have a security file for user auth. If not, you may need to mock this for now.
+from security import get_current_user 
 from models import User, Note, Flashcard, StudySet
 
-# Notice: No prefix! We will explicitly define the paths to prevent 307 Redirects
 router = APIRouter(tags=["Notes Section"])
 
-client = AsyncOpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
+# Initialize DeepSeek Client
+deepseek_client = AsyncOpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY", "your-deepseek-api-key"),
     base_url="https://api.deepseek.com"
 )
 
 # ==========================================
-# PYDANTIC SCHEMAS (Strictly matching the handoff)
+# PYDANTIC SCHEMAS
 # ==========================================
 
 class NoteCreate(BaseModel):
@@ -57,6 +59,92 @@ def calculate_note_metadata(text: str):
     word_count = len(text.split()) if text else 0
     snippet = text[:77] + "..." if len(text) > 80 else text
     return word_count, snippet
+
+# --- AI Background Task for Flashcards ---
+async def generate_cards_bg(note_id: int, user_id: int, options: GenerateCardsOptions, db: Session):
+    print(f"Starting DeepSeek flashcard generation for note {note_id}...")
+    
+    note = db.get(Note, note_id)
+    if not note or not note.content_text:
+        return
+
+    # Create the prompt based on user options
+    focus_instruction = "Generate both definition-style cards and conceptual questions."
+    if options.definitions and not options.questions:
+        focus_instruction = "Generate ONLY definition-style vocabulary cards (Term -> Definition)."
+    elif options.questions and not options.definitions:
+        focus_instruction = "Generate ONLY conceptual question/answer cards. Do not generate simple vocabulary definitions."
+
+    prompt = f"""
+    You are an expert tutor. Create high-quality flashcards from the provided study notes.
+    {focus_instruction}
+    
+    Return ONLY raw, valid JSON. Format strictly as:
+    {{
+      "cards": [
+        {{
+          "question": "The front of the card",
+          "answer": "The back of the card (clear and concise)",
+          "difficulty": "easy" | "medium" | "hard"
+        }}
+      ]
+    }}
+    
+    NOTES TEXT:
+    {note.content_text}
+    """
+
+    try:
+        response = await deepseek_client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "You are an API that only returns valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"}
+        )
+        
+        ai_data = json.loads(response.choices[0].message.content)
+        cards_data = ai_data.get("cards", [])
+        
+        if not cards_data:
+            return
+
+        # 1. Ensure a StudySet exists for this note
+        study_set = db.exec(select(StudySet).where(StudySet.title == f"Set: {note.title}")).first()
+        if not study_set:
+            study_set = StudySet(
+                user_id=user_id,
+                title=f"Set: {note.title}",
+                subject=note.subject,
+                card_count=0
+            )
+            db.add(study_set)
+            db.commit()
+            db.refresh(study_set)
+
+        # 2. Add the generated cards to the DB
+        for c in cards_data:
+            new_card = Flashcard(
+                study_set_id=study_set.id,
+                note_id=note.id,
+                question=c.get("question")[:200], # Truncate to DB limits just in case
+                answer=c.get("answer")[:400],
+                subject=note.subject,
+                difficulty=c.get("difficulty", "medium")
+            )
+            db.add(new_card)
+        
+        # 3. Update counts
+        study_set.card_count += len(cards_data)
+        note.card_count += len(cards_data)
+        
+        db.commit()
+        print(f"Successfully generated {len(cards_data)} cards for note {note_id}")
+
+    except Exception as e:
+        print(f"DeepSeek Error generating cards: {e}")
+
 
 # ==========================================
 # 1. GET ALL NOTES
@@ -200,6 +288,7 @@ async def delete_note(
 async def generate_cards(
     note_id: int,
     payload: GenerateCardsRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
@@ -208,52 +297,26 @@ async def generate_cards(
     if not note or note.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # In production, this would kick off a background task. 
-    # For now, we return the processing status structure per the handoff.
-    estimated_cards = max(1, note.word_count // 80)
+    # Rough estimate to show the user on the loading screen
+    estimated_cards = max(1, note.word_count // 60)
     
-    # TODO: Connect actual DeepSeek prompt generation here
+    # Fire off the DeepSeek generation in the background!
+    background_tasks.add_task(
+        generate_cards_bg, 
+        note.id, 
+        current_user.id, 
+        payload.options, 
+        db
+    )
     
     return {
-        "set_id": f"mock_set_{note_id}", 
+        "set_id": f"temp_set_{note_id}", 
         "status": "processing", 
         "estimated_cards": estimated_cards
     }
 
 # ==========================================
-# 7. GENERATE CANVAS (AI)
-# ==========================================
-@router.post("/notes/{note_id}/generate-canvas", status_code=status.HTTP_200_OK)
-async def generate_canvas(
-    note_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session)
-):
-    """Trigger AI Canvas (mind map) generation from note text."""
-    note = db.get(Note, note_id)
-    if not note or note.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Note not found")
-
-    return {
-        "canvas_id": f"mock_canvas_{note_id}", 
-        "status": "processing"
-    }
-
-# ==========================================
-# 8. GET GENERATION STATUS
-# ==========================================
-@router.get("/notes/{note_id}/status", status_code=status.HTTP_200_OK)
-async def get_generation_status(
-    note_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session)
-):
-    """Check card/canvas generation status for the AI Processing screen."""
-    # Mocking completion for the frontend to proceed
-    return {"status": "ready"}
-
-# ==========================================
-# 9. MANUALLY ADD CARD FROM HIGHLIGHT
+# 7. MANUALLY ADD CARD FROM HIGHLIGHT
 # ==========================================
 @router.post("/notes/{note_id}/cards", status_code=status.HTTP_201_CREATED)
 async def add_manual_card(
@@ -267,11 +330,31 @@ async def add_manual_card(
     if not note or note.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Create card logic here...
+    # Find or create a study set for this note
+    study_set = db.exec(select(StudySet).where(StudySet.title == f"Set: {note.title}")).first()
+    if not study_set:
+        study_set = StudySet(user_id=current_user.id, title=f"Set: {note.title}", subject=note.subject)
+        db.add(study_set)
+        db.commit()
+        db.refresh(study_set)
+
+    new_card = Flashcard(
+        study_set_id=study_set.id,
+        note_id=note.id,
+        question=payload.question,
+        answer=payload.answer,
+        subject=note.subject
+    )
+    db.add(new_card)
+    
+    study_set.card_count += 1
+    note.card_count += 1
+    
+    db.commit()
     return {"message": "Card added to set successfully"}
 
 # ==========================================
-# 10. GET ALL CARDS FOR A NOTE
+# 8. GET ALL CARDS FOR A NOTE
 # ==========================================
 @router.get("/notes/{note_id}/cards", status_code=status.HTTP_200_OK)
 async def get_note_cards(
