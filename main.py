@@ -30,7 +30,7 @@ from schemas import (
 # AI Service
 from ai_service import generate_deepseek_solution, generate_deepseek_study_plan
 from routers import study, notes, canvas
-
+from sqlalchemy import text
 # ... your other app setup ...
 
 
@@ -160,6 +160,17 @@ async def reset_password(request: ResetPasswordRequest, session: Session = Depen
     session.commit()
     return {"message": "Password updated successfully."}
 
+
+
+@app.get("/fix-db-schema")
+async def fix_database_schema(session: Session = Depends(get_session)):
+    try:
+        # This tells PostgreSQL to add the missing column
+        session.exec(text('ALTER TABLE flashcard ADD COLUMN note_id INTEGER REFERENCES note(id);'))
+        session.commit()
+        return {"message": "Database schema updated successfully! You can delete this endpoint now."}
+    except Exception as e:
+        return {"error": str(e)}
 
 # ==========================================
 # PROTECTED ONBOARDING ROUTES

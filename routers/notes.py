@@ -10,7 +10,6 @@ from openai import AsyncOpenAI
 
 # Database, Models, and Authentication
 from database import get_session
-# Assuming you have a security file for user auth. If not, you may need to mock this for now.
 from security import get_current_user 
 from models import User, Note, Flashcard, StudySet
 
@@ -272,14 +271,21 @@ async def delete_note(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
-    """Soft delete note and ALL associated flashcards (via cascade)."""
-    note = db.get(Note, note_id)
-    if not note or note.user_id != current_user.id:
+    """Delete note and ALL associated flashcards to avoid FK errors."""
+    # 1. Verify Note exists and belongs to the user
+    note = db.exec(select(Note).where(Note.id == note_id, Note.user_id == current_user.id)).first()
+    if not note:
         raise HTTPException(status_code=404, detail="Note not found")
         
+    # 2. Delete all related Flashcards FIRST
+    flashcards = db.exec(select(Flashcard).where(Flashcard.note_id == note_id)).all()
+    for card in flashcards:
+        db.delete(card)
+
+    # 3. Safely delete the Note
     db.delete(note)
     db.commit()
-    return {"message": "Note deleted successfully"}
+    return {"message": "Note and its flashcards deleted successfully"}
 
 # ==========================================
 # 6. GENERATE CARDS (AI)

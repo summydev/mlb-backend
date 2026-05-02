@@ -6,7 +6,7 @@ import networkx as nx
 from openai import AsyncOpenAI
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from sqlmodel import Session, select
-from typing import List
+from typing import List, Optional
 import os
 
 # Import your schemas and models
@@ -14,9 +14,10 @@ from schemas import CanvasCreate, CanvasResponse, CanvasStatusResponse, NodeCrea
 from models import Canvas, CanvasNode, CanvasConnection, CanvasSourceType, Note
 from security import get_current_user
 from models import User
-from database import get_session # explicitly importing the dependency
+from database import get_session 
 
-router = APIRouter(prefix="/canvases", tags=["canvases"])
+# ⚠️ Notice: We removed the prefix so we can define explicit paths, just like we did for Notes!
+router = APIRouter(tags=["Canvas Section"])
 
 # Initialize the Async DeepSeek Client
 deepseek_client = AsyncOpenAI(
@@ -27,23 +28,13 @@ deepseek_client = AsyncOpenAI(
 # --- AI Processing Background Task ---
 
 async def process_note_to_canvas_bg(canvas_id: uuid.UUID, note_content: str, db: Session):
-    """
-    Background task:
-    1. Sends text to DeepSeek to extract nodes/edges as JSON.
-    2. Uses NetworkX to calculate spatial (x,y) coordinates.
-    3. Saves everything to the database.
-    """
     print(f"Starting DeepSeek processing for canvas {canvas_id}...")
     
-    # Fetch the canvas record to update it later
     canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id)).first()
     if not canvas:
         print("Canvas not found, aborting background task.")
         return
 
-    # ==========================================
-    # STEP 1: DEEPSEEK LLM EXTRACTION
-    # ==========================================
     prompt = f"""
     You are an expert educational AI. Analyze the following study notes and extract a mind map structure.
     Return ONLY raw, valid JSON. Do not use markdown blocks like ```json.
@@ -71,7 +62,7 @@ async def process_note_to_canvas_bg(canvas_id: uuid.UUID, note_content: str, db:
                 {"role": "system", "content": "You are an API that only returns valid JSON."},
                 {"role": "user", "content": prompt}
             ],
-            response_format={"type": "json_object"} # Forces strictly valid JSON
+            response_format={"type": "json_object"} 
         )
         
         ai_data = json.loads(response.choices[0].message.content)
@@ -80,9 +71,6 @@ async def process_note_to_canvas_bg(canvas_id: uuid.UUID, note_content: str, db:
         print(f"DeepSeek Error: {e}")
         return
 
-    # ==========================================
-    # STEP 2: SPATIAL LAYOUT (Force-Directed Graph)
-    # ==========================================
     G = nx.Graph()
     
     G.add_node("hero")
@@ -94,9 +82,6 @@ async def process_note_to_canvas_bg(canvas_id: uuid.UUID, note_content: str, db:
         
     positions = nx.spring_layout(G, center=(1500, 1500), scale=600, seed=42)
 
-    # ==========================================
-    # STEP 3: SAVE TO DATABASE
-    # ==========================================
     id_map = {} 
     
     hero_uuid = uuid.uuid4()
@@ -142,21 +127,44 @@ async def process_note_to_canvas_bg(canvas_id: uuid.UUID, note_content: str, db:
             db.add(connection)
             
     canvas.node_count = len(ai_data.get("concepts", [])) + 1
-    
     db.commit()
     print(f"Successfully processed and mapped canvas {canvas_id}!")
 
 
-# --- API Endpoints ---
+# ==========================================
+# API ENDPOINTS
+# ==========================================
 
-@router.post("/from-notes", response_model=CanvasStatusResponse)
+# 1. GET ALL CANVASES
+@router.get("/users/me/canvases", status_code=200)
+def get_user_canvases(
+    search: Optional[str] = "",
+    filter: Optional[str] = "All",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session)
+):
+    """Fetch user's canvases with search and filter capabilities."""
+    query = select(Canvas).where(Canvas.user_id == current_user.id)
+    
+    if search:
+        query = query.where((Canvas.name.icontains(search)) | (Canvas.subject.icontains(search)))
+        
+    if filter and filter.lower() != "all":
+        query = query.where(Canvas.subject.ilike(filter))
+        
+    query = query.order_by(Canvas.id.desc())
+    canvases = db.exec(query).all()
+    
+    return {"canvases": canvases}
+
+# 2. CREATE CANVAS FROM NOTES (AI)
+@router.post("/canvases/from-notes", response_model=CanvasStatusResponse)
 def create_canvas_from_note(
     payload: CanvasCreate, 
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
-    """Trigger AI generation of a Canvas from an existing Note."""
     if not payload.note_id:
         raise HTTPException(status_code=400, detail="note_id is required")
         
@@ -165,7 +173,7 @@ def create_canvas_from_note(
         raise HTTPException(status_code=404, detail="Note not found")
         
     db_canvas = Canvas(
-        user_id=current_user.id, # Uses the real authenticated user!
+        user_id=current_user.id,
         name=payload.name,
         subject=payload.subject,
         source_type=CanvasSourceType.notes,
@@ -176,17 +184,15 @@ def create_canvas_from_note(
     db.refresh(db_canvas)
 
     background_tasks.add_task(process_note_to_canvas_bg, db_canvas.id, note.content_text, db)
-    
     return {"status": "processing", "node_count": 0, "nodes": []}
 
-@router.get("/{canvas_id}/status", response_model=CanvasStatusResponse)
+# 3. GET CANVAS STATUS / CONTENT
+@router.get("/canvases/{canvas_id}/status", response_model=CanvasStatusResponse)
 def get_canvas_status(
     canvas_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
-    """Polling endpoint for the AI Loading Screen."""
-    # Ensure the user requesting status actually owns the canvas
     canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id, Canvas.user_id == current_user.id)).first()
     if not canvas: 
         raise HTTPException(status_code=404, detail="Canvas not found")
@@ -196,15 +202,15 @@ def get_canvas_status(
     else:
         return {"status": "processing", "node_count": 0, "nodes": []}
 
-@router.post("", response_model=CanvasResponse)
+# 4. CREATE MANUAL CANVAS
+@router.post("/canvases", response_model=CanvasResponse)
 def create_manual_canvas(
     payload: CanvasCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
-    """Create an empty canvas manually (no AI generation)."""
     db_canvas = Canvas(
-        user_id=current_user.id, # Uses real authenticated user
+        user_id=current_user.id,
         name=payload.name,
         subject=payload.subject,
         source_type=CanvasSourceType.manual
@@ -212,18 +218,16 @@ def create_manual_canvas(
     db.add(db_canvas)
     db.commit()
     db.refresh(db_canvas)
-    
     return db_canvas
 
-@router.post("/{canvas_id}/nodes", response_model=NodeResponse)
+# 5. ADD NODE
+@router.post("/canvases/{canvas_id}/nodes", response_model=NodeResponse)
 def add_node_to_canvas(
     canvas_id: uuid.UUID, 
     node: NodeCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
-    """Add a single node manually to an existing canvas."""
-    # Verify ownership before adding nodes
     canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id, Canvas.user_id == current_user.id)).first()
     if not canvas:
         raise HTTPException(status_code=404, detail="Canvas not found")
@@ -242,5 +246,32 @@ def add_node_to_canvas(
     canvas.node_count += 1
     db.commit()
     db.refresh(db_node)
-    
     return db_node
+
+# 6. DELETE CANVAS (SAFE CASCADE DELETE)
+@router.delete("/canvases/{canvas_id}", status_code=200)
+def delete_canvas(
+    canvas_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session)
+):
+    # 1. Find the Canvas
+    canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id, Canvas.user_id == current_user.id)).first()
+    if not canvas:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+        
+    # 2. Delete all connections FIRST
+    connections = db.exec(select(CanvasConnection).where(CanvasConnection.canvas_id == canvas_id)).all()
+    for conn in connections:
+        db.delete(conn)
+
+    # 3. Delete all nodes SECOND
+    nodes = db.exec(select(CanvasNode).where(CanvasNode.canvas_id == canvas_id)).all()
+    for node in nodes:
+        db.delete(node)
+
+    # 4. Finally, delete the Canvas itself
+    db.delete(canvas)
+    db.commit()
+    
+    return {"message": "Canvas and all its nodes deleted successfully"}
