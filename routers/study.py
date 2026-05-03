@@ -74,6 +74,34 @@ async def get_study_set(
     if not study_set or study_set.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Study set not found")
     return study_set
+@router.delete("/sets/{set_id}", status_code=200)
+async def delete_study_set(
+    set_id: int, 
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_session)
+):
+    """Safely deletes a study set and all its associated cards and sessions."""
+    
+    # 1. Verify the set exists and belongs to the user
+    study_set = db.get(StudySet, set_id)
+    if not study_set or study_set.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Study set not found")
+
+    # 2. Delete all related Feynman Sessions FIRST
+    feynman_sessions = db.exec(select(FeynmanSession).where(FeynmanSession.study_set_id == set_id)).all()
+    for session in feynman_sessions:
+        db.delete(session)
+
+    # 3. Delete all related Flashcards SECOND
+    flashcards = db.exec(select(Flashcard).where(Flashcard.study_set_id == set_id)).all()
+    for card in flashcards:
+        db.delete(card)
+
+    # 4. Finally, safely delete the Study Set
+    db.delete(study_set)
+    db.commit()
+
+    return {"message": "Study set and all associated data deleted successfully"}
 
 # ==========================================
 # 6B: STANDARD FLASHCARDS ENDPOINTS
