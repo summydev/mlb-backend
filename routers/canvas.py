@@ -248,6 +248,28 @@ def add_node_to_canvas(
     db.refresh(db_node)
     return db_node
 
+@router.get("/canvases/{canvas_id}", status_code=200)
+def get_single_canvas(
+    canvas_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session)
+):
+    """Fetch a single canvas, including all its nodes and connections."""
+    canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id, Canvas.user_id == current_user.id)).first()
+    if not canvas:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+
+    nodes = db.exec(select(CanvasNode).where(CanvasNode.canvas_id == canvas_id)).all()
+    connections = db.exec(select(CanvasConnection).where(CanvasConnection.canvas_id == canvas_id)).all()
+
+    return {
+        "id": canvas.id,
+        "name": canvas.name,
+        "subject": canvas.subject,
+        "nodes": nodes,
+        "connections": connections
+    }
+
 # 6. DELETE CANVAS (SAFE CASCADE DELETE)
 @router.delete("/canvases/{canvas_id}", status_code=200)
 def delete_canvas(
