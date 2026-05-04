@@ -74,6 +74,7 @@ async def get_study_set(
     if not study_set or study_set.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Study set not found")
     return study_set
+
 @router.delete("/sets/{set_id}", status_code=200)
 async def delete_study_set(
     set_id: int, 
@@ -177,11 +178,16 @@ async def complete_flashcard_session(
     base_xp = (payload.cards_correct * 5) + (payload.cards_incorrect * 1)
     pet_xp_awarded = int(base_xp * 0.5) 
 
-    # 1. Update Pet XP
+    # 1. Update Pet XP AND extract details for UI
     pet = db.exec(select(Pet).where(Pet.user_id == current_user.id)).first()
+    pet_type = "nova"
+    pet_level = 1
+    
     if pet:
         pet.xp += pet_xp_awarded
         db.add(pet)
+        pet_type = pet.pet_type
+        pet_level = pet.level
 
     # 2. Update Daily Activity (Real Streak Data)
     today_str = datetime.now().date().isoformat()
@@ -202,6 +208,8 @@ async def complete_flashcard_session(
         "session_summary": {
             "xp_earned": base_xp,
             "pet_xp": pet_xp_awarded,
+            "pet_type": pet_type,    # <-- DYNAMIC PET DATA
+            "pet_level": pet_level,  # <-- DYNAMIC PET DATA
             "streak_updated": True, 
             "next_suggestions": [
                 {"label": "Tackle your weak cards", "action_type": "review_weak"},
@@ -376,11 +384,16 @@ async def complete_feynman_session(
     
     db.add(daily_activity)
     
-    # 3. Update Pet Table
+    # 3. Update Pet Table AND extract details for UI
     pet = db.exec(select(Pet).where(Pet.user_id == current_user.id)).first()
+    pet_type = "nova"
+    pet_level = 1
+
     if pet:
         pet.xp += pet_xp
         db.add(pet)
+        pet_type = pet.pet_type
+        pet_level = pet.level
 
     db.commit()
 
@@ -388,6 +401,8 @@ async def complete_feynman_session(
         "session_summary": {
             "xp_earned": base_xp,
             "pet_xp": pet_xp,
+            "pet_type": pet_type,   # <-- DYNAMIC PET DATA
+            "pet_level": pet_level, # <-- DYNAMIC PET DATA
             "comprehension_score": payload.final_score,
             "next_suggestions": [
                 {"label": "Review your gaps", "action_type": "review_gaps"}
