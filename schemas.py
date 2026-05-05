@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Literal, List, Optional
 from datetime import date, datetime
 from uuid import UUID
+from enum import Enum
  
 # ==========================================
 # AUTH & USER SETTINGS SCHEMAS
@@ -250,3 +251,86 @@ class CanvasStatusResponse(BaseModel):
     status: Literal["ready", "processing", "failed"]
     node_count: int
     nodes: List[NodeResponse] = []
+# ==========================================
+# COLLECTIONS SCHEMAS
+# ==========================================
+
+class VisibilityEnum(str, Enum):
+    private = "private"
+    shared = "shared"
+    public = "public"
+
+class ItemTypeEnum(str, Enum):
+    note = "note"
+    set = "set"
+    canvas = "canvas"
+
+# --- Sub-models ---
+class CollectionItem(BaseModel):
+    item_id: str  # Handles both Note IDs (int) and Canvas IDs (UUID)
+    item_type: ItemTypeEnum
+    position: int
+
+class AccessUser(BaseModel):
+    user_id: int  
+    email: str
+    granted_at: datetime
+    granted_by: int 
+
+class PendingRequest(BaseModel):
+    request_id: int 
+    user_id: int    
+    username: str
+    email: str
+    message: Optional[str] = None
+    requested_at: datetime
+
+# --- Request Schemas (Incoming Data) ---
+class CollectionCreate(BaseModel):
+    title: str = Field(..., max_length=60)
+    subject: str
+    visibility: VisibilityEnum
+    description: Optional[str] = Field(None, max_length=300)
+    cover_emoji: Optional[str] = None
+    item_ids: List[str] = []
+    item_types: List[str] = [] # Added this so the backend knows what type each ID is
+
+class CollectionUpdate(BaseModel):
+    title: Optional[str] = Field(None, max_length=60)
+    description: Optional[str] = Field(None, max_length=300)
+    subject: Optional[str] = None
+    visibility: Optional[VisibilityEnum] = None
+    cover_emoji: Optional[str] = None
+
+class ItemReorder(BaseModel):
+    item_id: str 
+    position: int
+
+class ItemReorderRequest(BaseModel):
+    positions: List[ItemReorder]
+
+class AccessRequestCreate(BaseModel):
+    message: Optional[str] = Field(None, max_length=120)
+
+# --- Response Schemas (Outgoing Data) ---
+class CollectionResponse(BaseModel):
+    collection_id: int 
+    owner_id: int      
+    title: str
+    description: Optional[str]
+    subject: str
+    cover_emoji: Optional[str]
+    visibility: VisibilityEnum
+    item_count: int
+    share_token: str
+    save_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class CollectionDetailResponse(CollectionResponse):
+    items: List[CollectionItem] = []
+    access_list: List[AccessUser] = []
+    pending_requests: List[PendingRequest] = []

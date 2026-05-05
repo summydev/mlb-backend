@@ -3,6 +3,9 @@ from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List
 from datetime import date, datetime
 from enum import Enum
+ 
+ 
+ 
 
 # ==========================================
 # ENUMS
@@ -263,3 +266,65 @@ class CanvasConnection(SQLModel, table=True):
         back_populates="incoming_connections",
         sa_relationship_kwargs={"foreign_keys": "[CanvasConnection.to_node_id]"}
     )
+
+    # ==========================================
+# COLLECTIONS MODELS
+# ==========================================
+
+class Collection(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id") # The Owner
+    
+    title: str
+    description: Optional[str] = None
+    subject: str
+    cover_emoji: Optional[str] = None
+    
+    visibility: str = Field(default="private") # "private", "shared", "public"
+    share_token: str = Field(default_factory=lambda: uuid.uuid4().hex[:12], unique=True)
+    save_count: int = Field(default=0)
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships (Optional but helpful)
+    # items: List["CollectionItem"] = Relationship(back_populates="collection")
+
+class CollectionItem(SQLModel, table=True):
+    """Mapping table linking a Collection to Notes, Sets, or Canvases"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    collection_id: int = Field(foreign_key="collection.id")
+    
+    item_type: str # "note", "set", "canvas"
+    
+    # We store item_id as a String because Note/Set use Int, but Canvas uses UUID!
+    item_id: str 
+    
+    position: int = Field(default=0) # For drag-and-drop reordering
+
+class CollectionAccess(SQLModel, table=True):
+    """For the 'Shared' and 'Private' visibility tiers"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    collection_id: int = Field(foreign_key="collection.id")
+    user_id: int = Field(foreign_key="user.id") # The user who is granted access
+    granted_at: datetime = Field(default_factory=datetime.utcnow)
+
+class CollectionRequest(SQLModel, table=True):
+    """For Pending Access Requests"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    collection_id: int = Field(foreign_key="collection.id")
+    user_id: int = Field(foreign_key="user.id") # The user requesting access
+    message: Optional[str] = None
+    status: str = Field(default="pending") # "pending", "approved", "denied"
+    requested_at: datetime = Field(default_factory=datetime.utcnow)
+
+class Notification(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id") # The person receiving the notification
+    
+    title: str
+    body: str
+    deep_link: Optional[str] = None # e.g., "/collections/12/share"
+    is_read: bool = Field(default=False)
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)

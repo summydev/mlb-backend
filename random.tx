@@ -1,0 +1,3143 @@
+so urm i want to work on my community tab here [import 'package:flutter/material.dart';
+
+import 'package:get/get.dart';
+
+import 'package:mlb/canvas/screens/canvas_tab_wrapper.dart';
+
+import 'package:mlb/dashboard/screens/dashboard_screen.dart'; // Import your dashboard
+
+import 'package:mlb/study/screens/mode_selection_screen.dart';
+
+import 'main_nav_controller.dart';
+
+import 'shared_bottom_nav_bar.dart';
+
+
+
+class MainLayout extends StatelessWidget {
+
+  final MainNavigationController navCtrl = Get.put(MainNavigationController());
+
+
+
+  @override
+
+  Widget build(BuildContext context) {
+
+    return Scaffold(
+
+      body: Obx(() => IndexedStack(
+
+        index: navCtrl.currentIndex.value,
+
+        children: [
+
+          DashboardScreen(),      // Tab 0
+
+CanvasTabWrapper(),
+
+          ModeSelectionScreen(),   // Tab 2 (Placeholder)
+
+          const Center(child: Text('Community Tab')), // Tab 3 (Placeholder)
+
+          const Center(child: Text('Profile Tab')),   // Tab 4 (Placeholder)
+
+        ],
+
+      )),
+
+      extendBody: true, // Crucial for the frosted glass effect
+
+      bottomNavigationBar: SharedBottomNavBar(), 
+
+    );
+
+  }
+
+} and i have a routing tab import 'package:flutter/material.dart';
+
+import 'package:get/get.dart';
+
+
+
+// Existing Imports
+
+import 'package:mlb/auth/screens/authscreen.dart';
+
+import 'package:mlb/auth/screens/pet_adoption_screen.dart';
+
+import 'package:mlb/auth/screens/quiz_screen.dart';
+
+import 'package:mlb/canvas/screens/note_detail_screen.dart';
+
+import 'package:mlb/canvas/screens/note_editor_screen.dart';
+
+import 'package:mlb/canvas/screens/notes_library_screen.dart';
+
+import 'package:mlb/dashboard/screens/dashboard_screen.dart';
+
+import 'package:mlb/navigation/main_layout.dart'; 
+
+import 'package:mlb/splashscreen.dart';
+
+import 'package:mlb/plan/screens/study_plan_screen.dart';
+
+import 'package:mlb/solve/screens/solve_screen.dart';
+
+import 'package:mlb/study/screens/feynman_screen.dart';
+
+import 'package:mlb/study/screens/flashcards_screen.dart';
+
+import 'package:mlb/study/screens/mode_selection_screen.dart';
+
+
+
+// --- NEW IMPORTS FOR CANVAS ---
+
+import 'package:mlb/canvas/screens/infinite_canvas_screen.dart'; // Make sure this path is correct!
+
+
+
+class AppRoutes {
+
+  // Route Name Constants
+
+  static const String splash = '/splash';
+
+  static const String auth = '/auth';
+
+  static const String quiz = '/onboarding/quiz';
+
+  static const String petAdoption = '/onboarding/pet';
+
+  static const String dashboard = '/dashboard';
+
+  
+
+  // Home Tab Modals/Sub-screens
+
+  static const String plan = '/plan';
+
+  static const String solve = '/solve';
+
+
+
+  // --- TAB ROUTES ---
+
+  static const String canvas = '/canvas';                // Canvas Tab Root
+
+  static const String questBoard = '/quest_board';       // Community Tab
+
+  static const String community = '/community';          // Community Tab (General)
+
+
+
+  // --- STUDY TAB ROUTES ---
+
+  static const String modeSelection = '/study'; 
+
+  static const String flashcards = '/study/flashcards'; 
+
+  static const String feynman = '/study/feynman'; 
+
+
+
+  // --- NOTES SECTION ROUTES ---
+
+  static const String notesLibrary = '/notes'; 
+
+  static const String noteEditor = '/notes/editor'; 
+
+  static const String noteDetail = '/notes/detail'; 
+
+
+
+  // --- NEW INFINITE CANVAS ROUTES ---
+
+  static const String canvasDetail = '/canvas/detail'; 
+
+  
+
+
+
+  // GetX Route Definitions
+
+  static final List<GetPage> pages = [
+
+    GetPage(name: splash, page: () => SplashScreen()),
+
+    GetPage(name: auth, page: () => AuthScreen(), transition: Transition.leftToRight),
+
+    GetPage(name: quiz, page: () => QuizScreen(), transition: Transition.fadeIn),
+
+    GetPage(name: petAdoption, page: () => PetAdoptionScreen(), transition: Transition.rightToLeft),
+
+    
+
+    // Notes Routes
+
+    GetPage(name: notesLibrary, page: () => NotesLibraryScreen(), transition: Transition.fadeIn),
+
+    GetPage(name: noteEditor, page: () => NoteEditorScreen(), transition: Transition.rightToLeft), 
+
+    GetPage(name: noteDetail, page: () => NoteDetailScreen(), transition: Transition.rightToLeft),
+
+    
+
+    // --- NEW INFINITE CANVAS ROUTE (Spec calls for push left) ---
+
+    GetPage(name: canvasDetail, page: () => InfiniteCanvasScreen(), transition: Transition.rightToLeft),
+
+
+
+    GetPage(
+
+      name: dashboard, 
+
+      page: () => MainLayout(), 
+
+      transition: Transition.fadeIn
+
+    ),
+
+    
+
+    // Home Tab
+
+    GetPage(name: plan, page: () => StudyPlanScreen(), transition: Transition.rightToLeft),
+
+    GetPage(name: solve, page: () => SolveScreen(), transition: Transition.rightToLeft),
+
+ 
+
+    // Study Tab
+
+    GetPage(name: modeSelection, page: () => ModeSelectionScreen(), transition: Transition.leftToRight),
+
+    GetPage(name: flashcards, page: () => FlashcardsScreen(), transition: Transition.leftToRight), 
+
+    GetPage(name: feynman, page: () => FeynmanScreen(), transition: Transition.leftToRight), 
+
+  ];
+
+}] and this is the developer handoff {from reportlab.lib.pagesizes import A4
+
+from reportlab.lib.units import mm
+
+from reportlab.lib.colors import HexColor
+
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
+from reportlab.lib.styles import ParagraphStyle
+
+from reportlab.platypus import (
+
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+
+    HRFlowable, PageBreak, KeepTogether
+
+)
+
+from reportlab.platypus import Flowable
+
+import datetime
+
+
+
+INK        = HexColor('#0E0A2E')
+
+INDIGO     = HexColor('#1A1066')
+
+INDIGO_MID = HexColor('#5040D0')
+
+VOLT       = HexColor('#C8F53C')
+
+SKY        = HexColor('#5ECEFF')
+
+MINT       = HexColor('#3CFFC8')
+
+PEACH      = HexColor('#FF8A65')
+
+MUTED      = HexColor('#8B85A8')
+
+WHITE      = HexColor('#FFFFFF')
+
+LIGHT_BG   = HexColor('#F4F2FF')
+
+LIGHT_CARD = HexColor('#ECEAF8')
+
+BORDER     = HexColor('#D4D0F0')
+
+TEXT_DARK  = HexColor('#0E0A2E')
+
+TEXT_MED   = HexColor('#3D3670')
+
+TEXT_LIGHT = HexColor('#7B75A8')
+
+INFO_BG    = HexColor('#EDE9FF')
+
+INFO_BD    = HexColor('#5040D0')
+
+WARN_BG    = HexColor('#FFF4ED')
+
+WARN_BD    = HexColor('#FF8A65')
+
+SUCCESS_BG = HexColor('#E6F8F4')
+
+SUCCESS_BD = HexColor('#0F6E56')
+
+SKY_BG     = HexColor('#E8F8FF')
+
+SKY_BD     = HexColor('#5ECEFF')
+
+
+
+W, H = A4
+
+
+
+
+
+# ─────────────────────────────────────────────────────────────
+
+# FLOWABLES
+
+# ─────────────────────────────────────────────────────────────
+
+class ScreenBlock(Flowable):
+
+    def __init__(self, sid, name, route, nav_note, color=INDIGO_MID):
+
+        super().__init__()
+
+        self.sid=sid; self.name=name; self.route=route
+
+        self.nav=nav_note; self.color=color; self.width=W-40*mm
+
+
+
+    def wrap(self,*args): return self.width, 50
+
+
+
+    def draw(self):
+
+        c=self.canv
+
+        c.setFillColor(self.color)
+
+        c.roundRect(0,2,self.width,46,8,fill=1,stroke=0)
+
+        tc=WHITE if self.color not in (VOLT,MINT,SKY) else INK
+
+        c.setFillColor(tc)
+
+        c.setFont('Helvetica-Bold',8); c.drawString(12,38,f'SCREEN  {self.sid}')
+
+        c.setFont('Helvetica-Bold',14); c.drawString(12,18,self.name)
+
+        c.setFont('Helvetica',8); c.drawRightString(self.width-12,38,f'Route: {self.route}')
+
+        pc=VOLT if self.color==INDIGO_MID else HexColor('#2D2090')
+
+        ptc=INK if pc==VOLT else WHITE
+
+        c.setFillColor(pc); c.roundRect(self.width-174,8,162,18,9,fill=1,stroke=0)
+
+        c.setFillColor(ptc); c.setFont('Helvetica-Bold',7.5)
+
+        c.drawCentredString(self.width-93,14.5,self.nav)
+
+
+
+
+
+class SectionBanner(Flowable):
+
+    def __init__(self,title,subtitle='',color=INDIGO):
+
+        super().__init__()
+
+        self.title=title; self.subtitle=subtitle
+
+        self.color=color; self.width=W-40*mm
+
+
+
+    def wrap(self,*args): return self.width, 38
+
+
+
+    def draw(self):
+
+        c=self.canv
+
+        c.setFillColor(self.color); c.rect(0,2,self.width,32,fill=1,stroke=0)
+
+        c.setFillColor(VOLT); c.rect(0,2,4,32,fill=1,stroke=0)
+
+        c.setFillColor(WHITE); c.setFont('Helvetica-Bold',10.5)
+
+        c.drawString(14,21,self.title.upper())
+
+        if self.subtitle:
+
+            c.setFont('Helvetica',8); c.setFillColor(HexColor('#C8C4E8'))
+
+            c.drawString(14,8,self.subtitle)
+
+
+
+
+
+class NoticeBox(Flowable):
+
+    def __init__(self,text,bg,bd,icon='',height=36):
+
+        super().__init__()
+
+        self.text=text; self.bg=bg; self.bd=bd
+
+        self.icon=icon; self._h=height; self.width=W-40*mm
+
+
+
+    def wrap(self,*args): return self.width, self._h
+
+
+
+    def draw(self):
+
+        c=self.canv
+
+        c.setFillColor(self.bg); c.roundRect(0,0,self.width,self._h-2,6,fill=1,stroke=0)
+
+        c.setStrokeColor(self.bd); c.setLineWidth(1)
+
+        c.roundRect(0,0,self.width,self._h-2,6,fill=0,stroke=1)
+
+        c.setStrokeColor(self.bd); c.setLineWidth(2.5); c.line(0,0,0,self._h-2)
+
+        c.setFillColor(TEXT_DARK); c.setFont('Helvetica',8.5)
+
+        c.drawString(10,11,(self.icon+'  ' if self.icon else '')+self.text)
+
+
+
+
+
+class ComponentLabel(Flowable):
+
+    def __init__(self,text,color=INDIGO_MID):
+
+        super().__init__()
+
+        self.text=text; self.color=color; self.width=W-40*mm
+
+
+
+    def wrap(self,*args): return self.width, 22
+
+
+
+    def draw(self):
+
+        c=self.canv
+
+        tw=len(self.text)*6.2+18
+
+        c.setFillColor(self.color); c.roundRect(0,2,tw,18,5,fill=1,stroke=0)
+
+        fc=INK if self.color in (VOLT,MINT,SKY) else WHITE
+
+        c.setFillColor(fc); c.setFont('Helvetica-Bold',8)
+
+        c.drawString(9,8,self.text.upper())
+
+
+
+
+
+class QuestBoardMockup(Flowable):
+
+    """Visual mock of Co-op Quest Board screen."""
+
+    def __init__(self): super().__init__(); self.width=W-40*mm
+
+
+
+    def wrap(self,*args): return self.width, 230
+
+
+
+    def draw(self):
+
+        c=self.canv; bw=self.width
+
+
+
+        # Background
+
+        c.setFillColor(INDIGO); c.roundRect(0,0,bw,228,10,fill=1,stroke=0)
+
+
+
+        # Header
+
+        c.setFillColor(WHITE); c.setFont('Helvetica-Bold',14)
+
+        c.drawString(14,206,'Co-op Quests')
+
+        c.setFillColor(MUTED); c.setFont('Helvetica',8)
+
+        c.drawString(14,194,'Study together, win together.')
+
+
+
+        # Segmented control
+
+        c.setFillColor(HexColor('#FFFFFF10'))
+
+        c.roundRect(14,178,120,18,9,fill=1,stroke=0)
+
+        c.setFillColor(INDIGO_MID)
+
+        c.roundRect(16,180,58,14,7,fill=1,stroke=0)
+
+        c.setFillColor(WHITE); c.setFont('Helvetica-Bold',7.5)
+
+        c.drawCentredString(45,185,'Active')
+
+        c.setFillColor(MUTED); c.setFont('Helvetica',7.5)
+
+        c.drawCentredString(105,185,'Completed')
+
+
+
+        # Hero quest card
+
+        c.setFillColor(HexColor('#5ECEFF15'))
+
+        c.roundRect(14,90,bw-28,82,10,fill=1,stroke=0)
+
+        c.setStrokeColor(HexColor('#5ECEFF40')); c.setLineWidth(1)
+
+        c.roundRect(14,90,bw-28,82,10,fill=0,stroke=1)
+
+
+
+        c.setFillColor(WHITE); c.setFont('Helvetica-Bold',11)
+
+        c.drawString(24,160,'Conquer the Nervous System')
+
+        c.setFillColor(MUTED); c.setFont('Helvetica',7.5)
+
+        c.drawString(24,150,'Team Biology 301  ·  4 members')
+
+
+
+        # Timer
+
+        c.setFillColor(PEACH); c.setFont('Helvetica-Bold',8)
+
+        c.drawString(24,140,'⏱  TIME LEFT: 24h 12m')
+
+
+
+        # Thick progress bar
+
+        c.setFillColor(HexColor('#FFFFFF20'))
+
+        c.roundRect(24,126,bw-52,10,5,fill=1,stroke=0)
+
+        c.setFillColor(SKY)
+
+        c.roundRect(24,126,(bw-52)*0.80,10,5,fill=1,stroke=0)
+
+        c.setFillColor(MUTED); c.setFont('Helvetica',7)
+
+        c.drawString(24,118,'80% complete  ·  400 / 500 terms mastered')
+
+
+
+        # Avatars
+
+        colours=[HexColor('#C8F53C'),HexColor('#5ECEFF'),HexColor('#FF8A65'),HexColor('#3CFFC8')]
+
+        for i,col in enumerate(colours):
+
+            c.setFillColor(col)
+
+            c.circle(30+i*22,105,10,fill=1,stroke=0)
+
+            c.setFillColor(INK); c.setFont('Helvetica-Bold',7)
+
+            c.drawCentredString(30+i*22,102,['Z','K','A','M'][i])
+
+        c.setFillColor(MUTED); c.setFont('Helvetica',7.5)
+
+        c.drawString(120,102,'Zara, Kwame + 2 contributing')
+
+
+
+        # Leaderboard section
+
+        c.setFillColor(MUTED); c.setFont('Helvetica-Bold',7)
+
+        c.drawString(14,84,'LEADERBOARD')
+
+
+
+        rows=[('01','Zara','1,200 XP',VOLT),('02','Kwame','850 XP',WHITE),('03','Amara','610 XP',HexColor('#5A5480'))]
+
+        for i,(rank,name,xp,col) in enumerate(rows):
+
+            y=70-i*18
+
+            c.setFillColor(col); c.setFont('Helvetica-Bold',8)
+
+            c.drawString(14,y,rank)
+
+            c.setFillColor(WHITE if col!=HexColor('#5A5480') else MUTED)
+
+            c.setFont('Helvetica',8); c.drawString(36,y,name)
+
+            c.setFillColor(col); c.setFont('Helvetica-Bold',8)
+
+            c.drawRightString(bw-14,y,xp)
+
+
+
+        # Join CTA
+
+        c.setFillColor(HexColor('#FFFFFF10'))
+
+        c.roundRect(14,6,bw-28,18,9,fill=1,stroke=0)
+
+        c.setStrokeColor(HexColor('#FFFFFF20')); c.setLineWidth(0.5)
+
+        c.roundRect(14,6,bw-28,18,9,fill=0,stroke=1)
+
+        c.setFillColor(MUTED); c.setFont('Helvetica',8)
+
+        c.drawCentredString(bw/2,12,'+ Join or Create a Study Group')
+
+
+
+
+
+class DiscoverFeedMockup(Flowable):
+
+    """Visual mock of the Discover feed."""
+
+    def __init__(self): super().__init__(); self.width=W-40*mm
+
+
+
+    def wrap(self,*args): return self.width, 160
+
+
+
+    def draw(self):
+
+        c=self.canv; bw=self.width
+
+
+
+        c.setFillColor(INK); c.roundRect(0,0,bw,158,10,fill=1,stroke=0)
+
+
+
+        # Section label
+
+        c.setFillColor(MUTED); c.setFont('Helvetica-Bold',7)
+
+        c.drawString(12,144,'TRENDING SETS')
+
+
+
+        # Set card 1
+
+        c.setFillColor(HexColor('#FFFFFF08'))
+
+        c.roundRect(12,108,bw-24,32,8,fill=1,stroke=0)
+
+        c.setStrokeColor(HexColor('#FFFFFF15')); c.setLineWidth(0.5)
+
+        c.roundRect(12,108,bw-24,32,8,fill=0,stroke=1)
+
+        c.setFillColor(INFO_BG); c.roundRect(14,116,30,16,8,fill=1,stroke=0)
+
+        c.setFillColor(INDIGO_MID); c.setFont('Helvetica-Bold',7)
+
+        c.drawCentredString(29,122,'BIO')
+
+        c.setFillColor(WHITE); c.setFont('Helvetica-Bold',9)
+
+        c.drawString(52,130,'Cell Division & Mitosis')
+
+        c.setFillColor(MUTED); c.setFont('Helvetica',7.5)
+
+        c.drawString(52,120,'by @nkechi_studies  ·  48 cards')
+
+        c.setFillColor(VOLT); c.setFont('Helvetica-Bold',7)
+
+        c.drawRightString(bw-14,130,'★ 4.9')
+
+        c.setFillColor(HexColor('#3CFFC830'))
+
+        c.roundRect(bw-52,114,40,12,6,fill=1,stroke=0)
+
+        c.setFillColor(MINT); c.setFont('Helvetica-Bold',6.5)
+
+        c.drawCentredString(bw-32,118,'1.2k saves')
+
+
+
+        # Set card 2
+
+        c.setFillColor(HexColor('#FFFFFF08'))
+
+        c.roundRect(12,70,bw-24,32,8,fill=1,stroke=0)
+
+        c.setStrokeColor(HexColor('#FFFFFF15')); c.setLineWidth(0.5)
+
+        c.roundRect(12,70,bw-24,32,8,fill=0,stroke=1)
+
+        c.setFillColor(HexColor('#FF8A6520')); c.roundRect(14,78,30,16,8,fill=1,stroke=0)
+
+        c.setFillColor(PEACH); c.setFont('Helvetica-Bold',7)
+
+        c.drawCentredString(29,84,'CHEM')
+
+        c.setFillColor(WHITE); c.setFont('Helvetica-Bold',9)
+
+        c.drawString(52,92,'Organic Chemistry Reactions')
+
+        c.setFillColor(MUTED); c.setFont('Helvetica',7.5)
+
+        c.drawString(52,82,'by @tunde_med  ·  62 cards')
+
+        c.setFillColor(VOLT); c.setFont('Helvetica-Bold',7)
+
+        c.drawRightString(bw-14,92,'★ 4.7')
+
+
+
+        # Set card 3
+
+        c.setFillColor(HexColor('#FFFFFF08'))
+
+        c.roundRect(12,32,bw-24,32,8,fill=1,stroke=0)
+
+        c.setStrokeColor(HexColor('#FFFFFF15')); c.setLineWidth(0.5)
+
+        c.roundRect(12,32,bw-24,32,8,fill=0,stroke=1)
+
+        c.setFillColor(HexColor('#5ECEFF20')); c.roundRect(14,40,30,16,8,fill=1,stroke=0)
+
+        c.setFillColor(SKY); c.setFont('Helvetica-Bold',7)
+
+        c.drawCentredString(29,46,'LAW')
+
+        c.setFillColor(WHITE); c.setFont('Helvetica-Bold',9)
+
+        c.drawString(52,54,'Nigerian Constitutional Law')
+
+        c.setFillColor(MUTED); c.setFont('Helvetica',7.5)
+
+        c.drawString(52,44,'by @barAdaeze  ·  35 cards')
+
+        c.setFillColor(VOLT); c.setFont('Helvetica-Bold',7)
+
+        c.drawRightString(bw-14,54,'★ 4.8')
+
+
+
+        # Search bar
+
+        c.setFillColor(HexColor('#FFFFFF0C'))
+
+        c.roundRect(12,10,bw-24,18,9,fill=1,stroke=0)
+
+        c.setStrokeColor(HexColor('#FFFFFF15')); c.setLineWidth(0.5)
+
+        c.roundRect(12,10,bw-24,18,9,fill=0,stroke=1)
+
+        c.setFillColor(MUTED); c.setFont('Helvetica',8)
+
+        c.drawString(22,16,'🔍  Search public sets and canvases…')
+
+
+
+
+
+# ─────────────────────────────────────────────────────────────
+
+# STYLES & HELPERS
+
+# ─────────────────────────────────────────────────────────────
+
+def S():
+
+    return {
+
+        'h1':    ParagraphStyle('h1',fontName='Helvetica-Bold',fontSize=15,
+
+                     textColor=INDIGO,leading=19,spaceBefore=14,spaceAfter=6),
+
+        'h2':    ParagraphStyle('h2',fontName='Helvetica-Bold',fontSize=11,
+
+                     textColor=INDIGO_MID,leading=14,spaceBefore=10,spaceAfter=4),
+
+        'h3':    ParagraphStyle('h3',fontName='Helvetica-Bold',fontSize=9.5,
+
+                     textColor=TEXT_DARK,leading=13,spaceBefore=6,spaceAfter=3),
+
+        'body':  ParagraphStyle('body',fontName='Helvetica',fontSize=9,
+
+                     textColor=TEXT_MED,leading=14,spaceAfter=4),
+
+        'small': ParagraphStyle('sm',fontName='Helvetica',fontSize=8,
+
+                     textColor=TEXT_LIGHT,leading=12,spaceAfter=3),
+
+        'bullet':ParagraphStyle('bul',fontName='Helvetica',fontSize=9,
+
+                     textColor=TEXT_MED,leading=13,leftIndent=12,spaceAfter=3,
+
+                     bulletIndent=3),
+
+        'sub':   ParagraphStyle('sub',fontName='Helvetica',fontSize=8.5,
+
+                     textColor=TEXT_LIGHT,leading=12,leftIndent=24,spaceAfter=2,
+
+                     bulletIndent=15),
+
+        'th':    ParagraphStyle('th',fontName='Helvetica-Bold',fontSize=8.5,
+
+                     textColor=WHITE,leading=11),
+
+        'td':    ParagraphStyle('td',fontName='Helvetica',fontSize=8.5,
+
+                     textColor=TEXT_MED,leading=12),
+
+        'tdb':   ParagraphStyle('tdb',fontName='Helvetica-Bold',fontSize=8.5,
+
+                     textColor=TEXT_DARK,leading=12),
+
+        'code':  ParagraphStyle('code',fontName='Courier',fontSize=8,
+
+                     textColor=INDIGO,leading=13,backColor=LIGHT_CARD,
+
+                     leftIndent=8,rightIndent=8,spaceAfter=4),
+
+        'cover_t':ParagraphStyle('ct',fontName='Helvetica-Bold',fontSize=32,
+
+                     textColor=WHITE,leading=36,spaceAfter=6),
+
+        'cover_s':ParagraphStyle('cs',fontName='Helvetica',fontSize=13,
+
+                     textColor=HexColor('#C8C4E8'),leading=18,spaceAfter=4),
+
+    }
+
+
+
+
+
+def bt(rows,widths,hbg=INDIGO):
+
+    t=Table(rows,colWidths=widths)
+
+    t.setStyle(TableStyle([
+
+        ('BACKGROUND',(0,0),(-1,0),hbg),
+
+        ('ROWBACKGROUNDS',(0,1),(-1,-1),[WHITE,LIGHT_BG]),
+
+        ('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6),
+
+        ('LEFTPADDING',(0,0),(-1,-1),8),('RIGHTPADDING',(0,0),(-1,-1),6),
+
+        ('LINEBELOW',(0,0),(-1,-1),0.4,BORDER),
+
+        ('VALIGN',(0,0),(-1,-1),'TOP'),
+
+    ]))
+
+    return t
+
+
+
+def api_t(rows,st):
+
+    data=[[Paragraph(h,st['th']) for h in ['Method','Endpoint','Payload / Params','Response']]]
+
+    for m,e,p,r in rows:
+
+        data.append([Paragraph(m,st['tdb']),Paragraph(e,st['td']),
+
+                     Paragraph(p,st['td']),Paragraph(r,st['td'])])
+
+    return bt(data,[16*mm,46*mm,68*mm,30*mm])
+
+
+
+def state_t(rows,st):
+
+    data=[[Paragraph(h,st['th']) for h in ['State / Condition','UI behaviour','Dev note']]]
+
+    for s,u,d in rows:
+
+        data.append([Paragraph(s,st['tdb']),Paragraph(u,st['td']),Paragraph(d,st['td'])])
+
+    return bt(data,[38*mm,74*mm,48*mm])
+
+
+
+def b(t,st): return Paragraph(f'<bullet>\u2022</bullet>{t}',st['bullet'])
+
+def sb(t,st): return Paragraph(f'<bullet>  \u2013</bullet>{t}',st['sub'])
+
+
+
+
+
+# ─────────────────────────────────────────────────────────────
+
+# PAGE TEMPLATES
+
+# ─────────────────────────────────────────────────────────────
+
+def cover_bg(canvas,doc):
+
+    canvas.saveState()
+
+    canvas.setFillColor(INK); canvas.rect(0,0,W,H,fill=1,stroke=0)
+
+    canvas.setFillColor(INDIGO); canvas.circle(W+60,H+40,220,fill=1,stroke=0)
+
+    canvas.setFillColor(INDIGO_MID); canvas.circle(-30,-20,160,fill=1,stroke=0)
+
+    canvas.setFillColor(SKY); canvas.circle(W*0.3,H*0.15,80,fill=1,stroke=0)
+
+    canvas.setFillColor(HexColor('#0E0A2E90'))
+
+    canvas.circle(W*0.3,H*0.15,80,fill=1,stroke=0)
+
+    canvas.setFillColor(VOLT); canvas.rect(0,H-5,W,5,fill=1,stroke=0)
+
+    canvas.setFillColor(INDIGO_MID); canvas.rect(0,0,W,32,fill=1,stroke=0)
+
+    canvas.setFillColor(MUTED); canvas.setFont('Helvetica',7.5)
+
+    canvas.drawString(20*mm,12,
+
+        f"myLB  |  Community Tab — Developer Handoff  |  {datetime.date.today().strftime('%d %B %Y')}")
+
+    canvas.drawRightString(W-20*mm,12,'CONFIDENTIAL  |  v1.0')
+
+    canvas.restoreState()
+
+
+
+
+
+def inner_bg(canvas,doc):
+
+    canvas.saveState()
+
+    canvas.setFillColor(HexColor('#FAFAF8')); canvas.rect(0,0,W,H,fill=1,stroke=0)
+
+    canvas.setFillColor(INDIGO); canvas.rect(0,H-18,W,18,fill=1,stroke=0)
+
+    canvas.setFillColor(SKY); canvas.rect(0,H-21,50,3,fill=1,stroke=0)
+
+    canvas.setFillColor(WHITE); canvas.setFont('Helvetica-Bold',7.5)
+
+    canvas.drawString(20*mm,H-13,
+
+        'myLB — Community Tab Developer Handoff  (⊕ Community)')
+
+    canvas.setFont('Helvetica',7.5); canvas.setFillColor(HexColor('#C8C4E8'))
+
+    canvas.drawRightString(W-20*mm,H-13,f'v1.0  |  {datetime.date.today().strftime("%B %Y")}')
+
+    canvas.setFillColor(BORDER); canvas.rect(20*mm,18,W-40*mm,0.4,fill=1,stroke=0)
+
+    canvas.setFillColor(TEXT_LIGHT); canvas.setFont('Helvetica',7.5)
+
+    canvas.drawString(20*mm,8,'Confidential — Internal use only')
+
+    canvas.drawRightString(W-20*mm,8,f'Page {doc.page}')
+
+    canvas.restoreState()
+
+
+
+
+
+def page_bg(canvas,doc):
+
+    cover_bg(canvas,doc) if doc.page==1 else inner_bg(canvas,doc)
+
+
+
+
+
+# ═════════════════════════════════════════════════════════════
+
+def build():
+
+    out='/mnt/user-data/outputs/myLB_CommunityTab_DevHandoff.pdf'
+
+    doc=SimpleDocTemplate(out,pagesize=A4,
+
+        leftMargin=20*mm,rightMargin=20*mm,
+
+        topMargin=26*mm,bottomMargin=24*mm,
+
+        title='myLB – Community Tab Developer Handoff')
+
+    st=S(); story=[]
+
+
+
+    # ── COVER ─────────────────────────────────────────────────
+
+    story+=[Spacer(1,48*mm)]
+
+    story+=[Paragraph('my<font color="#C8F53C">LB</font>',st['cover_t'])]
+
+    story+=[Paragraph('Community Tab — Full Developer Handoff',st['cover_s'])]
+
+    story+=[Paragraph('⊕  Co-op Quest Board  ·  Discover Feed  ·  Study Groups  ·  Live Workspace',st['cover_s'])]
+
+    story+=[Spacer(1,10)]
+
+    acc=Table([['','']],colWidths=[28*mm,W-40*mm-28*mm])
+
+    acc.setStyle(TableStyle([
+
+        ('BACKGROUND',(0,0),(0,0),SKY),('BACKGROUND',(1,0),(1,0),INDIGO_MID),
+
+        ('ROWHEIGHT',(0,0),(-1,-1),3),
+
+        ('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0),
+
+        ('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),
+
+    ]))
+
+    story+=[acc,Spacer(1,14)]
+
+    meta=[
+
+        ['Document type',  'Developer Handoff — Community Tab complete specification'],
+
+        ['Prerequisites',  'Onboarding · Home Tab · Nav Bar · Canvas Tab · Study Tab handoffs done'],
+
+        ['Screens covered','Community root (tab nav) · Co-op Quest Board (8) · Discover Feed · Study Groups · Live Collaborative Workspace · Quest Detail'],
+
+        ['Key feature',    'This is the social/multiplayer hub. Real-time database required for live quest progress, cursor sync, and leaderboard updates.'],
+
+        ['Platform',       'iOS (primary) · Android parity · Dark mode'],
+
+        ['Version',        f"v1.0  —  {datetime.date.today().strftime('%d %B %Y')}"],
+
+    ]
+
+    mt=Table(meta,colWidths=[44*mm,116*mm])
+
+    mt.setStyle(TableStyle([
+
+        ('FONTNAME',(0,0),(0,-1),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),9),
+
+        ('TEXTCOLOR',(0,0),(0,-1),MUTED),('TEXTCOLOR',(1,0),(1,-1),WHITE),
+
+        ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),
+
+        ('LINEBELOW',(0,0),(-1,-2),0.3,HexColor('#2D2060')),
+
+    ]))
+
+    story+=[mt,PageBreak()]
+
+
+
+    # ════════════════════════════════════════════════════════
+
+    # PAGE 2 — OVERVIEW
+
+    # ════════════════════════════════════════════════════════
+
+    story+=[SectionBanner('Overview','What the Community tab contains and how it is structured')]
+
+    story+=[Spacer(1,8)]
+
+    story+=[Paragraph('The Community tab is the social engine of myLB',st['h1'])]
+
+    story+=[Paragraph(
+
+        'The Community tab (⊕) is where studying becomes a team sport. '
+
+        'It has four interconnected areas: the Co-op Quest Board (the multiplayer game lobby), '
+
+        'the Discover Feed (public study sets from the community), '
+
+        'Study Groups (creating and managing your group), and the Live Collaborative Workspace '
+
+        '(real-time shared notes with live cursors). '
+
+        'Real-time data is at the core of this tab — it requires a real-time database '
+
+        '(Firebase Realtime DB or Supabase Realtime) for live updates.',
+
+        st['body'])]
+
+    story+=[Spacer(1,8)]
+
+    story+=[NoticeBox(
+
+        'REAL-TIME REQUIREMENT: Quest progress bars, leaderboard positions, and live workspace '
+
+        'cursors all update in real time. Use WebSocket connections (Firebase / Supabase Realtime) '
+
+        'for these features — polling is NOT sufficient.',
+
+        WARN_BG,WARN_BD,'CRITICAL')]
+
+    story+=[Spacer(1,10)]
+
+
+
+    story+=[Paragraph('Community tab — complete screen map',st['h2'])]
+
+    smap=[
+
+        [Paragraph('Screen',st['th']),Paragraph('ID',st['th']),
+
+         Paragraph('Route',st['th']),Paragraph('Entry point',st['th']),
+
+         Paragraph('Nav bar',st['th'])],
+
+        [Paragraph('Community root\n(Quest Board)',st['tdb']),Paragraph('8',st['td']),
+
+         Paragraph('/community',st['td']),
+
+         Paragraph('Nav bar Community tap. Default view: Quest Board.',st['td']),
+
+         Paragraph('Community active',st['td'])],
+
+        [Paragraph('Quest Detail',st['tdb']),Paragraph('QD',st['td']),
+
+         Paragraph('/community/quests/{id}',st['td']),
+
+         Paragraph('Tap a quest card on the Quest Board.',st['td']),
+
+         Paragraph('Community active',st['td'])],
+
+        [Paragraph('Discover Feed',st['tdb']),Paragraph('DF',st['td']),
+
+         Paragraph('/community/discover',st['td']),
+
+         Paragraph('Tap "Discover" tab in Community segmented nav.',st['td']),
+
+         Paragraph('Community active',st['td'])],
+
+        [Paragraph('Study Groups',st['tdb']),Paragraph('SG',st['td']),
+
+         Paragraph('/community/groups',st['td']),
+
+         Paragraph('Tap "Groups" tab in Community segmented nav.',st['td']),
+
+         Paragraph('Community active',st['td'])],
+
+        [Paragraph('Group Detail',st['tdb']),Paragraph('GD',st['td']),
+
+         Paragraph('/community/groups/{id}',st['td']),
+
+         Paragraph('Tap a group card in Study Groups.',st['td']),
+
+         Paragraph('Community active',st['td'])],
+
+        [Paragraph('Live Workspace',st['tdb']),Paragraph('LW',st['td']),
+
+         Paragraph('/community/workspace/{id}',st['td']),
+
+         Paragraph('"Open Workspace" from Group Detail or Quest Detail.',st['td']),
+
+         Paragraph('Community active',st['td'])],
+
+        [Paragraph('Create/Join Group',st['tdb']),Paragraph('CG',st['td']),
+
+         Paragraph('/community/groups/new',st['td']),
+
+         Paragraph('"+ Join or Create a Study Group" button on Quest Board.',st['td']),
+
+         Paragraph('Community active',st['td'])],
+
+    ]
+
+    story+=[bt(smap,[30*mm,10*mm,38*mm,60*mm,22*mm]),Spacer(1,10)]
+
+
+
+    story+=[Paragraph('Community tab — internal navigation structure',st['h2'])]
+
+    story+=[Paragraph(
+
+        'The Community tab root (Screen 8) has a 3-segment navigation bar at the top: '
+
+        '"Quests" | "Discover" | "Groups". Each segment shows a different content area. '
+
+        'This is an in-tab toggle — no page push. '
+
+        'Tapping the Community tab from the bottom nav bar always goes to the "Quests" segment.',
+
+        st['body'])]
+
+    story+=[Spacer(1,6)]
+
+    seg_spec=[
+
+        [Paragraph('Segment',st['th']),Paragraph('Content',st['th']),
+
+         Paragraph('Default?',st['th']),Paragraph('Real-time?',st['th'])],
+
+        [Paragraph('Quests (left)',st['tdb']),
+
+         Paragraph('Co-op Quest Board — active and completed quests. '
+
+                   'Group leaderboard. Join/create group CTA.',st['td']),
+
+         Paragraph('Yes',st['td']),Paragraph('Yes — live progress',st['td'])],
+
+        [Paragraph('Discover (centre)',st['tdb']),
+
+         Paragraph('Public study sets and Canvases from the community. '
+
+                   'Search, filter, save, fork.',st['td']),
+
+         Paragraph('No',st['td']),Paragraph('No — static feed',st['td'])],
+
+        [Paragraph('Groups (right)',st['tdb']),
+
+         Paragraph('User\'s study groups. Create, join, manage. '
+
+                   'Each group links to its workspace and quests.',st['td']),
+
+         Paragraph('No',st['td']),Paragraph('Partial — member count',st['td'])],
+
+    ]
+
+    story+=[bt(seg_spec,[28*mm,90*mm,18*mm,24*mm]),PageBreak()]
+
+
+
+    # ════════════════════════════════════════════════════════
+
+    # PAGE 3 — SCREEN 8: CO-OP QUEST BOARD
+
+    # ════════════════════════════════════════════════════════
+
+    story+=[ScreenBlock('8','Co-op Quest Board','/community',
+
+            'Community tab active (Tab 3)',INDIGO)]
+
+    story+=[Spacer(1,8)]
+
+    story+=[Paragraph('Purpose',st['h2'])]
+
+    story+=[Paragraph(
+
+        'The Quest Board is the multiplayer game lobby of myLB. '
+
+        'It shows the user\'s active and completed group challenges, '
+
+        'live group progress, a leaderboard, and the gateway to creating '
+
+        'or joining study groups. It should feel energetic and competitive — '
+
+        'like opening a multiplayer lobby.',
+
+        st['body'])]
+
+    story+=[Spacer(1,8)]
+
+
+
+    story+=[Paragraph('Co-op Quest Board visual',st['h2'])]
+
+    story+=[Spacer(1,4)]
+
+    story+=[QuestBoardMockup()]
+
+    story+=[Spacer(1,4)]
+
+    story+=[Paragraph(
+
+        'Above: Quest Board showing segmented nav, featured hero quest card with thick '
+
+        'Sky Blue progress bar, member avatars, and leaderboard rows.',
+
+        st['small'])]
+
+    story+=[Spacer(1,10)]
+
+
+
+    story+=[SectionBanner('8.1  Data Requirements',color=INDIGO_MID)]
+
+    story+=[Spacer(1,6)]
+
+    story+=[api_t([
+
+        ('GET','/users/me/quests',
+
+         '?status=active|completed&page={n}&limit=10',
+
+         '200: { quests[], total_count }'),
+
+        ('GET','/quests/{id}',
+
+         'Authorization: Bearer {token}',
+
+         '200: { quest_id, title, description, target, progress, deadline, members[], leaderboard[] }'),
+
+        ('POST','/quests/{id}/contribute',
+
+         '{ xp_amount, session_id }',
+
+         '200: { new_progress, new_rank, xp_earned }  — called after each study session'),
+
+        ('GET','/quests/{id}/leaderboard',
+
+         'Real-time subscription (WebSocket)',
+
+         'Stream: { leaderboard[] } — updates live as members contribute'),
+
+    ],st)]
+
+    story+=[Spacer(1,6)]
+
+
+
+    quest_obj=[
+
+        [Paragraph('Field',st['th']),Paragraph('Type',st['th']),Paragraph('Description',st['th'])],
+
+        [Paragraph('quest_id',st['tdb']),Paragraph('UUID',st['td']),Paragraph('Unique identifier',st['td'])],
+
+        [Paragraph('title',st['tdb']),Paragraph('string',st['td']),Paragraph('Quest name e.g. "Conquer the Nervous System"',st['td'])],
+
+        [Paragraph('type',st['tdb']),Paragraph('enum',st['td']),Paragraph('coop | solo',st['td'])],
+
+        [Paragraph('target',st['tdb']),Paragraph('integer',st['td']),Paragraph('Goal number (e.g. 500 terms)',st['td'])],
+
+        [Paragraph('unit',st['tdb']),Paragraph('string',st['td']),Paragraph('Unit label e.g. "terms", "sessions", "XP"',st['td'])],
+
+        [Paragraph('progress',st['tdb']),Paragraph('integer',st['td']),Paragraph('Current collective progress. Updates in real time.',st['td'])],
+
+        [Paragraph('deadline',st['tdb']),Paragraph('ISO 8601 timestamp',st['td']),Paragraph('Quest end date/time. Used for countdown timer.',st['td'])],
+
+        [Paragraph('members[]',st['tdb']),Paragraph('array',st['td']),Paragraph('Each: { user_id, username, avatar_color, xp_contributed }',st['td'])],
+
+        [Paragraph('leaderboard[]',st['tdb']),Paragraph('array',st['td']),Paragraph('Members sorted by xp_contributed desc. Updated in real time.',st['td'])],
+
+        [Paragraph('group_id',st['tdb']),Paragraph('UUID',st['td']),Paragraph('Parent study group for this quest.',st['td'])],
+
+        [Paragraph('reward',st['tdb']),Paragraph('object',st['td']),Paragraph('{ trophy_name, trophy_emoji, xp_bonus } — awarded on completion.',st['td'])],
+
+        [Paragraph('status',st['tdb']),Paragraph('enum',st['td']),Paragraph('active | completed | failed (deadline passed, target not met)',st['td'])],
+
+    ]
+
+    story+=[bt(quest_obj,[32*mm,26*mm,102*mm]),Spacer(1,8)]
+
+
+
+    story+=[SectionBanner('8.2  UI Specification — Quest Board',color=INDIGO_MID)]
+
+    story+=[Spacer(1,6)]
+
+
+
+    story+=[ComponentLabel('Component A: Screen header + segmented nav')]
+
+    story+=[Spacer(1,4)]
+
+    qb_header=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Background',st['tdb']),
+
+         Paragraph('Deep Indigo (#1A1066). Full screen.',st['td'])],
+
+        [Paragraph('Screen title',st['tdb']),
+
+         Paragraph('"Co-op Quests" — Sora 800, 28px, #FFFFFF. 20pt below status bar.',st['td'])],
+
+        [Paragraph('Subtitle',st['tdb']),
+
+         Paragraph('"Study together, win together." — DM Sans 300, 14px, rgba(255,255,255,0.50).',st['td'])],
+
+        [Paragraph('3-segment control',st['tdb']),
+
+         Paragraph('Container: bg rgba(255,255,255,0.06), border-radius 10px, padding 4pt, height 38pt. '
+
+                   'Segments: "Quests" | "Discover" | "Groups". '
+
+                   'Active: bg #5040D0, border-radius 8px, DM Sans 500, 14px, #FFFFFF. '
+
+                   'Inactive: transparent, DM Sans 400, 14px, rgba(255,255,255,0.40). '
+
+                   'Sliding active pill animation: 200ms ease-out.',st['td'])],
+
+        [Paragraph('Sub-toggle (Quests only)',st['tdb']),
+
+         Paragraph('Below 3-segment, in the Quests view: '
+
+                   'Smaller pill toggle "Active" | "Completed". '
+
+                   'bg rgba(255,255,255,0.05), height 34pt. '
+
+                   'Active: bg #5040D0.',st['td'])],
+
+    ]
+
+    story+=[bt(qb_header,[36*mm,124*mm]),Spacer(1,8)]
+
+
+
+    story+=[ComponentLabel('Component B: Featured Quest card (hero)',HexColor('#0F5070'))]
+
+    story+=[Spacer(1,4)]
+
+    hero_quest=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Card container',st['tdb']),
+
+         Paragraph('bg rgba(94,206,255,0.08), border 1px solid rgba(94,206,255,0.25), '
+
+                   'border-radius 20px, padding 20pt. Full width minus 16pt gutters. '
+
+                   'First/most urgent active quest shown as hero.',st['td'])],
+
+        [Paragraph('Quest title',st['tdb']),
+
+         Paragraph('[quest.title] — Sora 700, 20px, #FFFFFF.',st['td'])],
+
+        [Paragraph('Group + member count',st['tdb']),
+
+         Paragraph('"[group.name]  ·  [members.length] members" — DM Sans 400, 12px, rgba(255,255,255,0.55). '
+
+                   '4pt below title.',st['td'])],
+
+        [Paragraph('Countdown timer',st['tdb']),
+
+         Paragraph('Clock icon (rgba(255,138,101,0.70), 14px) + '
+
+                   '"TIME LEFT: [Xh Ym]" — Space Mono 12px, #FF8A65 (Peach). '
+
+                   'Live countdown. Updates every minute. '
+
+                   'When < 2 hours: turns bright Peach and pulses gently.',st['td'])],
+
+        [Paragraph('Progress section label',st['tdb']),
+
+         Paragraph('"GROUP PROGRESS" — Space Mono 10px, #8B85A8, uppercase. 14pt margin-top.',st['td'])],
+
+        [Paragraph('Thick progress bar',st['tdb']),
+
+         Paragraph('Height 10px (thick — signals collective weight). '
+
+                   'bg rgba(255,255,255,0.10), fill #5ECEFF, border-radius 100px. '
+
+                   'Fill % = (quest.progress / quest.target) × 100. '
+
+                   'LIVE update via WebSocket subscription. Animate bar fill change (300ms ease).',st['td'])],
+
+        [Paragraph('Progress label',st['tdb']),
+
+         Paragraph('"[progress]% complete  ·  [progress_value] / [target] [unit] mastered" — '
+
+                   'Space Mono 11px, rgba(255,255,255,0.55). 6pt below bar.',st['td'])],
+
+        [Paragraph('Member avatars row',st['tdb']),
+
+         Paragraph('4 overlapping circular avatars (34×34pt each). Overlap: 10pt. '
+
+                   'Each avatar: unique muted bg colour, initials DM Sans 500 13px. '
+
+                   'Colours assigned server-side per user (consistent across app). '
+
+                   'If >4 members: show "+[n]" grey circle at end.',st['td'])],
+
+        [Paragraph('Member names',st['tdb']),
+
+         Paragraph('"[name1], [name2] + [n] others contributing" — '
+
+                   'DM Sans 13px, rgba(255,255,255,0.60). 10pt left margin from avatars.',st['td'])],
+
+        [Paragraph('"Contribute Now" CTA',st['tdb']),
+
+         Paragraph('Full width inside card. bg #5ECEFF, text #042C53 (deep dark), '
+
+                   'Sora 600, 14px, border-radius 10px, height 44pt. 14pt margin-top. '
+
+                   'Tap → Mode Selection (Study tab, Tab 2) with quest\'s study set pre-selected.',st['td'])],
+
+        [Paragraph('Card tap (outside CTA)',st['tdb']),
+
+         Paragraph('Tap anywhere on card (except CTA) → navigate to Quest Detail (Screen QD).',st['td'])],
+
+    ]
+
+    story+=[bt(hero_quest,[36*mm,124*mm]),Spacer(1,8)]
+
+
+
+    story+=[ComponentLabel('Component C: Additional quest cards')]
+
+    story+=[Spacer(1,4)]
+
+    story+=[Paragraph(
+
+        'If the user has more than one active quest, additional cards appear below the hero. '
+
+        'These use a smaller, condensed card style.',st['body'])]
+
+    story+=[Spacer(1,4)]
+
+    extra_quests=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Card style (condensed)',st['tdb']),
+
+         Paragraph('bg rgba(94,206,255,0.05), border 1px rgba(94,206,255,0.15), '
+
+                   'border-radius 14px, padding 14pt 16pt. '
+
+                   'Same colours as hero but smaller. 8pt gap between cards.',st['td'])],
+
+        [Paragraph('Layout',st['tdb']),
+
+         Paragraph('Title (DM Sans 500, 13px) + thin progress bar (4px) + '
+
+                   'footer meta row (progress value left, time left right in Peach).',st['td'])],
+
+        [Paragraph('Solo quest style',st['tdb']),
+
+         Paragraph('Solo quests use Volt tint: bg rgba(200,245,60,0.05), '
+
+                   'border rgba(200,245,60,0.20), progress bar fill #C8F53C. '
+
+                   'No member avatars (solo quest).',st['td'])],
+
+        [Paragraph('Max shown on screen',st['tdb']),
+
+         Paragraph('Show maximum 3 quest cards on Quest Board (1 hero + 2 condensed). '
+
+                   'If more: "See all [n] quests →" link at bottom.',st['td'])],
+
+    ]
+
+    story+=[bt(extra_quests,[36*mm,124*mm]),Spacer(1,8)]
+
+
+
+    story+=[ComponentLabel('Component D: Leaderboard',HexColor('#3D3670'))]
+
+    story+=[Spacer(1,4)]
+
+    leaderboard=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Section label',st['tdb']),
+
+         Paragraph('"LEADERBOARD" — Space Mono 11px, #8B85A8, uppercase. 20pt margin-top.',st['td'])],
+
+        [Paragraph('Row layout',st['tdb']),
+
+         Paragraph('Flex row. Height 52pt. Border-bottom 0.5px rgba(255,255,255,0.07).',st['td'])],
+
+        [Paragraph('Rank badge',st['tdb']),
+
+         Paragraph('"01" / "02" etc. — Space Mono 700, 13px. '
+
+                   'Rank 1: #C8F53C (Volt). Rank 2: #FFFFFF. Rank 3+: rgba(255,255,255,0.40). '
+
+                   'Min-width 28pt.',st['td'])],
+
+        [Paragraph('Avatar',st['tdb']),
+
+         Paragraph('36×36pt circle. User\'s assigned avatar colour. Initials DM Sans 500, 14px. '
+
+                   'Rank 1: Volt-tinted bg (rgba(200,245,60,0.20)), border 1px rgba(200,245,60,0.40).',st['td'])],
+
+        [Paragraph('Username',st['tdb']),
+
+         Paragraph('[member.username] — DM Sans 500, 14px, #FFFFFF. Flex 1. 10pt left margin.',st['td'])],
+
+        [Paragraph('XP contributed',st['tdb']),
+
+         Paragraph('"[xp_contributed] XP" — Space Mono 700, 13px. '
+
+                   'Rank 1: #C8F53C. Rank 2: #FFFFFF. Rank 3+: rgba(255,255,255,0.40).',st['td'])],
+
+        [Paragraph('Current user row',st['tdb']),
+
+         Paragraph('If current user is in the leaderboard: their row has a subtle '
+
+                   'bg rgba(200,245,60,0.05) tint and "You" DM Sans 10px label below username.',st['td'])],
+
+        [Paragraph('Real-time updates',st['tdb']),
+
+         Paragraph('Subscribe to WebSocket channel for this quest\'s leaderboard. '
+
+                   'When new data arrives: animate rank changes (smooth reorder 400ms).',st['td'])],
+
+    ]
+
+    story+=[bt(leaderboard,[36*mm,124*mm]),Spacer(1,8)]
+
+
+
+    story+=[ComponentLabel('Component E: Join / Create CTA')]
+
+    story+=[Spacer(1,4)]
+
+    join_cta=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Button',st['tdb']),
+
+         Paragraph('Full width, bg rgba(255,255,255,0.05), border 1px rgba(255,255,255,0.12), '
+
+                   'border-radius 14px, height 48pt. '
+
+                   '"+ Join or Create a Study Group" — DM Sans 500, 14px, rgba(255,255,255,0.70). Centred.',st['td'])],
+
+        [Paragraph('Tap action',st['tdb']),
+
+         Paragraph('Navigate to Create/Join Group screen (Screen CG). Push-left.',st['td'])],
+
+        [Paragraph('Position',st['tdb']),
+
+         Paragraph('Below leaderboard section, above bottom nav bar.',st['td'])],
+
+    ]
+
+    story+=[bt(join_cta,[36*mm,124*mm]),Spacer(1,8)]
+
+
+
+    story+=[Paragraph('Quest Board states',st['h2'])]
+
+    qb_states=[
+
+        ('No active quests',
+
+         'Empty state: large trophy illustration. '
+
+         '"No active quests. Join a group to start one." '
+
+         'Volt CTA: "Find a Study Group".',
+
+         'Show when quests[] is empty for active filter.'),
+
+        ('Completed quests tab',
+
+         'Same layout but cards styled muted (60% opacity). '
+
+         'Progress bar filled 100% in Mint. '
+
+         '"COMPLETED" Mint badge on each card.',
+
+         'GET /quests?status=completed'),
+
+        ('Quest deadline passed (failed)',
+
+         'Card gets red-tinted border: rgba(226,75,74,0.30). '
+
+         '"Quest ended — target not reached." Space Mono text.',
+
+         'Check quest.status === "failed".'),
+
+        ('Quest completed (success)',
+
+         'Full-screen overlay animation: Sky Blue confetti burst. '
+
+         '"Quest complete! 🎉" Sora 700 24px. Trophy emoji 64px. '
+
+         'XP bonus awarded. Dismiss after 3s or on tap.',
+
+         'Trigger on WebSocket event type: "quest_completed".'),
+
+        ('Real-time progress update',
+
+         'When a group member completes a session: progress bar animates to new fill %. '
+
+         'Leaderboard reorders with 400ms animation if ranks change.',
+
+         'WebSocket subscription to /quests/{id}/progress channel.'),
+
+    ]
+
+    story+=[state_t(qb_states,st),PageBreak()]
+
+
+
+    # ════════════════════════════════════════════════════════
+
+    # PAGE 5 — SCREEN QD: QUEST DETAIL
+
+    # ════════════════════════════════════════════════════════
+
+    story+=[ScreenBlock('QD','Quest Detail','/community/quests/{id}',
+
+            'Community tab active (Tab 3)',HexColor('#0F5070'))]
+
+    story+=[Spacer(1,8)]
+
+    story+=[Paragraph('Purpose',st['h2'])]
+
+    story+=[Paragraph(
+
+        'Quest Detail gives the full picture of a single co-op quest. '
+
+        'It shows the quest description, all member contributions, '
+
+        'the full leaderboard, and entry points into the group workspace '
+
+        'and study session.',
+
+        st['body'])]
+
+    story+=[Spacer(1,8)]
+
+
+
+    qd_ui=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Back arrow',st['tdb']),
+
+         Paragraph('Returns to Quest Board. Push-right.',st['td'])],
+
+        [Paragraph('Quest title',st['tdb']),
+
+         Paragraph('[quest.title] — Sora 800, 24px, #FFFFFF. 20pt below nav.',st['td'])],
+
+        [Paragraph('Group chip',st['tdb']),
+
+         Paragraph('"[group.name]" — Space Mono 10px, #5ECEFF, '
+
+                   'bg rgba(94,206,255,0.12), border 1px rgba(94,206,255,0.25), pill.',st['td'])],
+
+        [Paragraph('Quest description',st['tdb']),
+
+         Paragraph('[quest.description] — DM Sans 400, 13px, rgba(255,255,255,0.65), line-height 1.6.',st['td'])],
+
+        [Paragraph('Stats row (3 cards)',st['tdb']),
+
+         Paragraph('Card 1: "[progress] / [target]" Sora 700 18px #FFFFFF / "[unit]" Space Mono 10px #8B85A8. '
+
+                   'Card 2: "[days_remaining] days" / "REMAINING" in Peach if < 2 days. '
+
+                   'Card 3: "[members.length]" / "MEMBERS".',st['td'])],
+
+        [Paragraph('Full leaderboard',st['tdb']),
+
+         Paragraph('All members shown (not capped at 3). Same row spec as Quest Board. '
+
+                   'Live updates via WebSocket.',st['td'])],
+
+        [Paragraph('Individual contribution bar',st['tdb']),
+
+         Paragraph('Below each leaderboard row: thin progress bar showing each member\'s '
+
+                   'percentage of the group total. '
+
+                   'bg rgba(255,255,255,0.08), fill = user\'s assigned colour.',st['td'])],
+
+        [Paragraph('"Contribute Now" CTA',st['tdb']),
+
+         Paragraph('Full width, same Sky Blue style as hero card. Sticky above nav bar.',st['td'])],
+
+        [Paragraph('"Open Workspace" button',st['tdb']),
+
+         Paragraph('Below CTA. Outlined: border 1px #5ECEFF, text #5ECEFF, Sora 600, 14px. '
+
+                   'Tap → Live Workspace (Screen LW).',st['td'])],
+
+        [Paragraph('Quest reward preview',st['tdb']),
+
+         Paragraph('Card at bottom showing the trophy that will be awarded on completion. '
+
+                   '"Reward: [reward.trophy_emoji] [reward.trophy_name] + [reward.xp_bonus] XP" — '
+
+                   'Sora 600, 14px. Slightly muted until quest completes.',st['td'])],
+
+    ]
+
+    story+=[bt(qd_ui,[36*mm,124*mm]),PageBreak()]
+
+
+
+    # ════════════════════════════════════════════════════════
+
+    # PAGE 6 — SCREEN DF: DISCOVER FEED
+
+    # ════════════════════════════════════════════════════════
+
+    story+=[ScreenBlock('DF','Discover Feed','/community/discover',
+
+            'Community tab active (Tab 3)',HexColor('#2D1EA0'))]
+
+    story+=[Spacer(1,8)]
+
+    story+=[Paragraph('Purpose',st['h2'])]
+
+    story+=[Paragraph(
+
+        'The Discover Feed is the public marketplace of study content. '
+
+        'Users browse, search, and save public flashcard sets and Canvases '
+
+        'created by others in the community. They can fork a set to their '
+
+        'own account and study from it.',
+
+        st['body'])]
+
+    story+=[Spacer(1,8)]
+
+
+
+    story+=[Paragraph('Discover Feed visual',st['h2'])]
+
+    story+=[Spacer(1,4)]
+
+    story+=[DiscoverFeedMockup()]
+
+    story+=[Spacer(1,4)]
+
+    story+=[Paragraph(
+
+        'Above: Discover Feed showing search bar, subject filter chips, '
+
+        'and public set cards with ratings and save counts.',st['small'])]
+
+    story+=[Spacer(1,10)]
+
+
+
+    story+=[SectionBanner('DF.1  Data Requirements',color=INDIGO_MID)]
+
+    story+=[Spacer(1,6)]
+
+    story+=[api_t([
+
+        ('GET','/community/sets',
+
+         '?subject={s}&sort=trending|recent|rating&search={q}&page={n}&limit=20',
+
+         '200: { sets[], total_count, has_more }'),
+
+        ('POST','/community/sets/{id}/save',
+
+         '{ }',
+
+         '200: { saved: true }  — adds to user\'s library'),
+
+        ('POST','/community/sets/{id}/fork',
+
+         '{ name? }',
+
+         '200: { new_set_id }  — creates editable copy in user\'s account'),
+
+        ('POST','/community/sets/{id}/rate',
+
+         '{ rating: 1|2|3|4|5 }',
+
+         '200: { new_average_rating }'),
+
+        ('POST','/community/sets/{id}/report',
+
+         '{ reason: string }',
+
+         '200: { acknowledged: true }'),
+
+    ],st)]
+
+    story+=[Spacer(1,6)]
+
+
+
+    story+=[Paragraph('Public set object spec',st['h3'])]
+
+    pub_set=[
+
+        [Paragraph('Field',st['th']),Paragraph('Type',st['th']),Paragraph('Description',st['th'])],
+
+        [Paragraph('set_id',st['tdb']),Paragraph('UUID',st['td']),Paragraph('Unique identifier',st['td'])],
+
+        [Paragraph('title',st['tdb']),Paragraph('string',st['td']),Paragraph('Set name',st['td'])],
+
+        [Paragraph('subject',st['tdb']),Paragraph('string',st['td']),Paragraph('Subject category',st['td'])],
+
+        [Paragraph('author_username',st['tdb']),Paragraph('string',st['td']),Paragraph('Creator\'s username',st['td'])],
+
+        [Paragraph('card_count',st['tdb']),Paragraph('integer',st['td']),Paragraph('Number of cards',st['td'])],
+
+        [Paragraph('average_rating',st['tdb']),Paragraph('float 1–5',st['td']),Paragraph('Community rating',st['td'])],
+
+        [Paragraph('save_count',st['tdb']),Paragraph('integer',st['td']),Paragraph('Times saved by other users',st['td'])],
+
+        [Paragraph('is_canvas',st['tdb']),Paragraph('boolean',st['td']),Paragraph('True if this is a Canvas (mind map) vs flat flashcard set',st['td'])],
+
+        [Paragraph('is_saved',st['tdb']),Paragraph('boolean',st['td']),Paragraph('Whether the current user has saved this set',st['td'])],
+
+        [Paragraph('tags[]',st['tdb']),Paragraph('string[]',st['td']),Paragraph('e.g. ["WAEC","Biology","2024"]',st['td'])],
+
+        [Paragraph('preview_cards[]',st['tdb']),Paragraph('array (max 3)',st['td']),Paragraph('First 3 cards for preview without full load',st['td'])],
+
+    ]
+
+    story+=[bt(pub_set,[32*mm,22*mm,106*mm]),Spacer(1,8)]
+
+
+
+    story+=[SectionBanner('DF.2  UI Specification',color=INDIGO_MID)]
+
+    story+=[Spacer(1,6)]
+
+
+
+    story+=[ComponentLabel('Component A: Search + filter bar')]
+
+    story+=[Spacer(1,4)]
+
+    df_search=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Search bar',st['tdb']),
+
+         Paragraph('Full-width pill. bg rgba(255,255,255,0.06), border 1px rgba(255,255,255,0.12), '
+
+                   'border-radius 100px, height 40pt. '
+
+                   'Placeholder: "Search public sets and canvases…" '
+
+                   'Live search: 300ms debounce → GET /community/sets?search={q}.',st['td'])],
+
+        [Paragraph('Subject filter chips',st['tdb']),
+
+         Paragraph('Horizontal scrollable. Pre-defined: "All" | "Biology" | "Chemistry" | '
+
+                   '"Physics" | "Maths" | "Law" | "Medicine" | "Economics" | "History". '
+
+                   'Active: Volt. Space Mono 10px pills.',st['td'])],
+
+        [Paragraph('Sort selector',st['tdb']),
+
+         Paragraph('Right-aligned above feed: "Sort: Trending ↓" — DM Sans 13px #8B85A8. '
+
+                   'Tap → bottom sheet options: "Trending" | "Top Rated" | "Most Recent" | '
+
+                   '"Most Saved". Active: Volt checkmark.',st['td'])],
+
+        [Paragraph('Type toggle',st['tdb']),
+
+         Paragraph('Small pill toggle: "All" | "Sets" | "Canvases". '
+
+                   'Filters is_canvas field. Left of sort selector.',st['td'])],
+
+    ]
+
+    story+=[bt(df_search,[36*mm,124*mm]),Spacer(1,8)]
+
+
+
+    story+=[ComponentLabel('Component B: Public set card')]
+
+    story+=[Spacer(1,4)]
+
+    df_card=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Card container',st['tdb']),
+
+         Paragraph('bg rgba(255,255,255,0.05), border 0.5px rgba(255,255,255,0.10), '
+
+                   'border-radius 14px, padding 14pt 16pt. 8pt gap between cards.',st['td'])],
+
+        [Paragraph('Subject badge',st['tdb']),
+
+         Paragraph('Left-aligned pill: subject abbreviation (max 4 chars), '
+
+                   'bg tinted by subject colour (Biology=Indigo, Chemistry=Peach, etc.), '
+
+                   'Space Mono 9px.',st['td'])],
+
+        [Paragraph('Canvas badge',st['tdb']),
+
+         Paragraph('Only if is_canvas=true: "◈ Canvas" Space Mono 9px #5040D0 pill '
+
+                   'alongside subject badge.',st['td'])],
+
+        [Paragraph('Set title',st['tdb']),
+
+         Paragraph('[set.title] — Sora 600, 14px, #FFFFFF. Truncate at 1 line.',st['td'])],
+
+        [Paragraph('Author + card count',st['tdb']),
+
+         Paragraph('"by @[author_username]  ·  [card_count] cards" — '
+
+                   'DM Sans 400, 12px, #8B85A8.',st['td'])],
+
+        [Paragraph('Rating',st['tdb']),
+
+         Paragraph('"★ [average_rating]" — Space Mono 700, 12px, #C8F53C. Right-aligned top.',st['td'])],
+
+        [Paragraph('Save count',st['tdb']),
+
+         Paragraph('"[save_count] saves" — Space Mono 10px, bg rgba(60,255,200,0.12), '
+
+                   'border 1px rgba(60,255,200,0.20), Mint text. Pill.',st['td'])],
+
+        [Paragraph('Save button',st['tdb']),
+
+         Paragraph('Bookmark icon (outline). Right side. '
+
+                   'Saved state: filled bookmark in Volt. '
+
+                   'Tap → POST /community/sets/{id}/save. Toggle state immediately (optimistic UI).',st['td'])],
+
+        [Paragraph('Tap card',st['tdb']),
+
+         Paragraph('Opens Set Preview bottom sheet (not a new screen). '
+
+                   'Shows first 3 cards, full description, author info, rating input, '
+
+                   '"Save" and "Study Now" CTAs.',st['td'])],
+
+    ]
+
+    story+=[bt(df_card,[36*mm,124*mm]),Spacer(1,8)]
+
+
+
+    story+=[ComponentLabel('Component C: Set Preview bottom sheet')]
+
+    story+=[Spacer(1,4)]
+
+    set_preview=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Sheet container',st['tdb']),
+
+         Paragraph('bg #1A1066. border-radius 24px 24px 0 0. Height ~70% of screen. '
+
+                   'Drag handle at top. Dismissible by drag down or scrim tap.',st['td'])],
+
+        [Paragraph('Set title + author',st['tdb']),
+
+         Paragraph('Large title Sora 700 20px + "@[author]" DM Sans 13px #8B85A8.',st['td'])],
+
+        [Paragraph('Stats row',st['tdb']),
+
+         Paragraph('"[card_count] cards" | "★ [rating]" | "[save_count] saves" — '
+
+                   '3 stats in Space Mono 11px pills.',st['td'])],
+
+        [Paragraph('Preview cards',st['tdb']),
+
+         Paragraph('First 3 cards shown as compact rows: '
+
+                   'question text DM Sans 13px #FFFFFF + "Tap to see answer" rgba(255,255,255,0.40).',st['td'])],
+
+        [Paragraph('User rating input',st['tdb']),
+
+         Paragraph('"Rate this set:" + 5 star icons. Tapping fills stars in Volt up to tapped position. '
+
+                   'POST /community/sets/{id}/rate on tap.',st['td'])],
+
+        [Paragraph('"Save to Library" CTA',st['tdb']),
+
+         Paragraph('Outlined button: border 1px #5040D0, text #FFFFFF. '
+
+                   'Changes to "Saved ✓" (Mint) on tap.',st['td'])],
+
+        [Paragraph('"Study Now →" CTA',st['tdb']),
+
+         Paragraph('Full width Volt CTA. '
+
+                   'If not saved: auto-saves first, then goes to Mode Selection. '
+
+                   'If already saved: goes straight to Mode Selection.',st['td'])],
+
+        [Paragraph('Report link',st['tdb']),
+
+         Paragraph('"Report this set" — DM Sans 12px rgba(255,255,255,0.30). '
+
+                   'Tap → POST /community/sets/{id}/report with reason.',st['td'])],
+
+    ]
+
+    story+=[bt(set_preview,[36*mm,124*mm]),PageBreak()]
+
+
+
+    # ════════════════════════════════════════════════════════
+
+    # PAGE 7 — SCREEN SG: STUDY GROUPS
+
+    # ════════════════════════════════════════════════════════
+
+    story+=[ScreenBlock('SG','Study Groups','/community/groups',
+
+            'Community tab active (Tab 3)',HexColor('#3D3670'))]
+
+    story+=[Spacer(1,8)]
+
+    story+=[Paragraph('Purpose',st['h2'])]
+
+    story+=[Paragraph(
+
+        'Study Groups is where users manage their groups. A group is the container '
+
+        'for co-op quests, shared workspaces, and group members. '
+
+        'Users can belong to multiple groups. Each group has a name, '
+
+        'subject focus, member list, active quests, and a shared workspace.',
+
+        st['body'])]
+
+    story+=[Spacer(1,8)]
+
+
+
+    story+=[SectionBanner('SG.1  Data Requirements',color=INDIGO_MID)]
+
+    story+=[Spacer(1,6)]
+
+    story+=[api_t([
+
+        ('GET','/users/me/groups',
+
+         'Authorization: Bearer {token}',
+
+         '200: { groups[] }'),
+
+        ('POST','/groups',
+
+         '{ name, subject, invite_code? }',
+
+         '200: { group_id, invite_code }  — creates new group'),
+
+        ('POST','/groups/join',
+
+         '{ invite_code }',
+
+         '200: { group }  — joins existing group'),
+
+        ('GET','/groups/{id}',
+
+         'Authorization: Bearer {token}',
+
+         '200: { group_id, name, subject, members[], active_quests[], workspace_id }'),
+
+        ('DELETE','/groups/{id}/members/{user_id}',
+
+         '—',
+
+         '200: { left: true }  — leave group'),
+
+    ],st)]
+
+    story+=[Spacer(1,6)]
+
+
+
+    group_obj=[
+
+        [Paragraph('Field',st['th']),Paragraph('Type',st['th']),Paragraph('Description',st['th'])],
+
+        [Paragraph('group_id',st['tdb']),Paragraph('UUID',st['td']),Paragraph('Unique identifier',st['td'])],
+
+        [Paragraph('name',st['tdb']),Paragraph('string',st['td']),Paragraph('Group name e.g. "Biology 301"',st['td'])],
+
+        [Paragraph('subject',st['tdb']),Paragraph('string',st['td']),Paragraph('Primary subject focus',st['td'])],
+
+        [Paragraph('member_count',st['tdb']),Paragraph('integer',st['td']),Paragraph('Total members',st['td'])],
+
+        [Paragraph('members[]',st['tdb']),Paragraph('array',st['td']),Paragraph('Each: { user_id, username, avatar_color, is_admin, is_online }',st['td'])],
+
+        [Paragraph('active_quest_count',st['tdb']),Paragraph('integer',st['td']),Paragraph('Number of active quests',st['td'])],
+
+        [Paragraph('workspace_id',st['tdb']),Paragraph('UUID',st['td']),Paragraph('ID of shared workspace for this group',st['td'])],
+
+        [Paragraph('invite_code',st['tdb']),Paragraph('string (6 chars)',st['td']),Paragraph('Short alphanumeric code to share for joining. e.g. "BIO301"',st['td'])],
+
+        [Paragraph('created_by',st['tdb']),Paragraph('UUID',st['td']),Paragraph('User ID of group admin',st['td'])],
+
+    ]
+
+    story+=[bt(group_obj,[32*mm,22*mm,106*mm]),Spacer(1,8)]
+
+
+
+    story+=[SectionBanner('SG.2  UI Specification',color=INDIGO_MID)]
+
+    story+=[Spacer(1,6)]
+
+    sg_ui=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Groups list',st['tdb']),
+
+         Paragraph('Vertical card list. Each group card: '
+
+                   'bg rgba(255,255,255,0.05), border-radius 14px, padding 16pt. '
+
+                   'Left: group initials avatar (44×44pt, Indigo Mid bg). '
+
+                   'Centre: group name Sora 600 14px #FFFFFF + subject DM Sans 12px #8B85A8. '
+
+                   'Right: "[member_count] members" Space Mono 10px #8B85A8.',st['td'])],
+
+        [Paragraph('Active quest badge',st['tdb']),
+
+         Paragraph('If active_quest_count > 0: Sky pill "[n] active quest(s)" on card. '
+
+                   'Space Mono 9px.',st['td'])],
+
+        [Paragraph('Online indicator',st['tdb']),
+
+         Paragraph('If any member is_online=true: green dot on group card. '
+
+                   '"[n] online" Space Mono 9px Mint.',st['td'])],
+
+        [Paragraph('Tap group card',st['tdb']),
+
+         Paragraph('Navigate to Group Detail (Screen GD). Push-left.',st['td'])],
+
+        [Paragraph('Empty state',st['tdb']),
+
+         Paragraph('"You\'re not in any groups yet." '
+
+                   '"Groups let you tackle quests together." '
+
+                   'Volt CTA: "Create or join a group".',st['td'])],
+
+        [Paragraph('FAB',st['tdb']),
+
+         Paragraph('Volt FAB (+). Tap → Create/Join Group screen (Screen CG).',st['td'])],
+
+    ]
+
+    story+=[bt(sg_ui,[36*mm,124*mm]),Spacer(1,8)]
+
+
+
+    story+=[Paragraph('Screen CG — Create or Join a Group',st['h2'])]
+
+    story+=[Paragraph(
+
+        'Accessed from the FAB on Study Groups or the "Join or Create" button on the Quest Board.',
+
+        st['body'])]
+
+    story+=[Spacer(1,4)]
+
+    cg_ui=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Two options (full screen)',st['tdb']),
+
+         Paragraph('Two large stacked cards (same style as Mode Selection): '
+
+                   'Card A "Create a Group" (Indigo Mid tint). '
+
+                   'Card B "Join with a code" (Volt tint).',st['td'])],
+
+        [Paragraph('Create flow',st['tdb']),
+
+         Paragraph('Group name input (Sora 600, max 30 chars). '
+
+                   'Subject picker chips. '
+
+                   '"Create Group" Volt CTA → POST /groups. '
+
+                   'On success: show invite code in a modal: '
+
+                   '"Share this code: [XXXXXX]" with copy button. '
+
+                   'Then navigate to Group Detail.',st['td'])],
+
+        [Paragraph('Join flow',st['tdb']),
+
+         Paragraph('6-character code input (Space Mono 24px, large, auto-caps). '
+
+                   '"Join Group" CTA → POST /groups/join { invite_code }. '
+
+                   'On success: navigate to Group Detail.',st['td'])],
+
+        [Paragraph('Invalid code error',st['tdb']),
+
+         Paragraph('Inline Peach error: "Invalid code. Check with your group admin."',st['td'])],
+
+        [Paragraph('Already in group error',st['tdb']),
+
+         Paragraph('Inline error: "You\'re already in this group." Navigate to that Group Detail.',st['td'])],
+
+    ]
+
+    story+=[bt(cg_ui,[36*mm,124*mm]),Spacer(1,8)]
+
+
+
+    story+=[Paragraph('Screen GD — Group Detail',st['h2'])]
+
+    gd_ui=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Group header',st['tdb']),
+
+         Paragraph('Group name Sora 800 24px + subject chip + '
+
+                   '"[member_count] members" Space Mono 11px.',st['td'])],
+
+        [Paragraph('Member list',st['tdb']),
+
+         Paragraph('Horizontal avatar row showing all members. '
+
+                   'Online indicator: green dot on avatar corner. '
+
+                   '"[n] members online now" Mint text.',st['td'])],
+
+        [Paragraph('Active quests section',st['tdb']),
+
+         Paragraph('List of active quests for this group. '
+
+                   'Each: condensed quest card style (same as Quest Board). '
+
+                   'Tap → Quest Detail (Screen QD).',st['td'])],
+
+        [Paragraph('"Open Workspace" CTA',st['tdb']),
+
+         Paragraph('Sky Blue outlined button. Tap → Live Workspace (Screen LW) for this group.',st['td'])],
+
+        [Paragraph('Invite members',st['tdb']),
+
+         Paragraph('Invite code shown: "Invite code: [XXXXXX]". '
+
+                   'Copy icon next to code. ',st['td'])],
+
+        [Paragraph('Leave group',st['tdb']),
+
+         Paragraph('"Leave group" link at bottom. Peach text. Confirmation alert.',st['td'])],
+
+    ]
+
+    story+=[bt(gd_ui,[36*mm,124*mm]),PageBreak()]
+
+
+
+    # ════════════════════════════════════════════════════════
+
+    # PAGE 8 — SCREEN LW: LIVE WORKSPACE
+
+    # ════════════════════════════════════════════════════════
+
+    story+=[ScreenBlock('LW','Live Collaborative Workspace','/community/workspace/{id}',
+
+            'Community tab active (Tab 3)',HexColor('#0F5070'))]
+
+    story+=[Spacer(1,8)]
+
+    story+=[Paragraph('Purpose',st['h2'])]
+
+    story+=[Paragraph(
+
+        'The Live Workspace is a shared document where group members can write, '
+
+        'annotate, and highlight notes together in real time. It shows live cursors '
+
+        'for each active member, colour-coded highlights, and a live contribution '
+
+        'progress bar that feeds directly into the active co-op quest. '
+
+        'This requires a real-time collaborative editing engine.',
+
+        st['body'])]
+
+    story+=[Spacer(1,8)]
+
+    story+=[NoticeBox(
+
+        'Real-time CRDT (Conflict-free Replicated Data Type) required for collaborative text editing. '
+
+        'Use Yjs + a WebSocket provider (y-websocket / Supabase Realtime). '
+
+        'DO NOT use last-write-wins — concurrent edits must merge gracefully.',
+
+        WARN_BG,WARN_BD,'TECHNICAL REQUIREMENT')]
+
+    story+=[Spacer(1,10)]
+
+
+
+    story+=[SectionBanner('LW.1  Data Requirements',color=INDIGO_MID)]
+
+    story+=[Spacer(1,6)]
+
+    story+=[api_t([
+
+        ('GET','/workspaces/{id}',
+
+         'Authorization: Bearer {token}',
+
+         '200: { workspace_id, group_id, title, content_ydoc, members[], active_quest_id? }'),
+
+        ('WS','/workspaces/{id}/sync',
+
+         'Yjs WebSocket sync protocol',
+
+         'Bidirectional — sync document edits, cursor positions, highlights in real time'),
+
+        ('POST','/workspaces/{id}/highlights',
+
+         '{ start_offset, end_offset, color, label? }',
+
+         '200: { highlight_id }  — persist a highlight'),
+
+        ('POST','/workspaces/{id}/comments',
+
+         '{ text, anchor_offset }',
+
+         '200: { comment_id }  — add inline comment'),
+
+    ],st)]
+
+    story+=[Spacer(1,6)]
+
+
+
+    story+=[SectionBanner('LW.2  UI Specification',color=INDIGO_MID)]
+
+    story+=[Spacer(1,6)]
+
+
+
+    lw_ui=[
+
+        [Paragraph('Element',st['th']),Paragraph('Specification',st['th'])],
+
+        [Paragraph('Background',st['tdb']),
+
+         Paragraph('Deep Indigo (#1A1066). Full screen.',st['td'])],
+
+        [Paragraph('Nav bar',st['tdb']),
+
+         Paragraph('Back arrow (→ Group Detail). '
+
+                   'Title: "[workspace.title]" Sora 600 16px #FFFFFF centred. '
+
+                   'Right: online member avatars row (24×24pt, overlapping, max 3 visible + "+n").',st['td'])],
+
+        [Paragraph('Quest progress bar (sticky top)',st['tdb']),
+
+         Paragraph('Full-width bar directly below nav bar. Height 6px. '
+
+                   'bg rgba(255,255,255,0.10), fill #5ECEFF (Sky). '
+
+                   'Label above: "GROUP QUEST: [n]/[target] [unit] MASTERED" Space Mono 10px #8B85A8. '
+
+                   'LIVE update via WebSocket.',st['td'])],
+
+        [Paragraph('Collaborative text area',st['tdb']),
+
+         Paragraph('Full-screen scrollable rich text editor. '
+
+                   'bg transparent (Indigo shows through). '
+
+                   'DM Sans 400, 15px, rgba(255,255,255,0.85), line-height 1.75. '
+
+                   'Powered by Yjs CRDT for conflict-free concurrent editing.',st['td'])],
+
+        [Paragraph('Live cursors',st['tdb']),
+
+         Paragraph('Each online member\'s cursor shown as a coloured vertical bar '
+
+                   '+ small nametag pill above it showing their username. '
+
+                   'Each member has a unique cursor colour (same as avatar colour). '
+
+                   'Cursors move in real time as members type or navigate.',st['td'])],
+
+        [Paragraph('Multi-user highlights',st['tdb']),
+
+         Paragraph('Each member can highlight text. Highlights shown as background colour '
+
+                   '(10% opacity of the member\'s cursor colour). '
+
+                   'Multiple members can highlight different sections simultaneously.',st['td'])],
+
+        [Paragraph('Inline comments',st['tdb']),
+
+         Paragraph('Comment bubble icon appears at the right margin beside highlighted text. '
+
+                   'Tapping opens a thread sidebar. '
+
+                   'Comment count badge on the icon.',st['td'])],
+
+        [Paragraph('Bottom toolbar',st['tdb']),
+
+         Paragraph('Sticky above keyboard. Same formatting tools as Note Editor '
+
+                   '(Bold, Italic, Heading, Bullet, etc.). '
+
+                   '+ "Highlight" button: applies current user\'s highlight colour. '
+
+                   '+ "Comment" button: inserts comment at cursor position.',st['td'])],
+
+        [Paragraph('Member presence row',st['tdb']),
+
+         Paragraph('Horizontal strip at top of text area (below quest bar): '
+
+                   'Shows active member avatars. Green pulse dot on each. '
+
+                   '"[n] people editing now" Space Mono 10px Mint.',st['td'])],
+
+        [Paragraph('Offline state',st['tdb']),
+
+         Paragraph('If connection drops: Peach banner "You\'re offline. '
+
+                   'Changes will sync when you reconnect." '
+
+                   'Continue allowing local edits — Yjs queues them for sync.',st['td'])],
+
+    ]
+
+    story+=[bt(lw_ui,[36*mm,124*mm]),Spacer(1,8)]
+
+
+
+    story+=[Paragraph('Live Workspace states',st['h2'])]
+
+    lw_states=[
+
+        ('Empty workspace',
+
+         'Placeholder text: "Start collaborating — type to add shared notes." '
+
+         'DM Sans 15px rgba(255,255,255,0.30). Disappears on first keystroke by any member.',
+
+         'Show when document is empty (content length = 0).'),
+
+        ('Member joins',
+
+         'Toast notification slides in from top: "[Username] joined the workspace 👋" '
+
+         '2s auto-dismiss. Toast bg: rgba(94,206,255,0.15), Sky border.',
+
+         'Trigger on WebSocket member_joined event.'),
+
+        ('Member leaves',
+
+         'Their cursor and highlights fade out (300ms). No toast notification.',
+
+         'Remove cursor on member_left WebSocket event.'),
+
+        ('Edit conflict (should not occur with CRDT)',
+
+         'Yjs handles conflicts transparently. If a merge issue does occur: '
+
+         'show Peach banner "Sync issue detected. Refreshing…" and re-fetch document.',
+
+         'Fallback only. Should never trigger with correct Yjs implementation.'),
+
+        ('Quest contribution update',
+
+         'When any member completes a study session during workspace use: '
+
+         'quest progress bar animates to new value. '
+
+         'Toast: "[Username] contributed [n] XP to the quest!"',
+
+         'Trigger on WebSocket quest_progress event.'),
+
+    ]
+
+    story+=[state_t(lw_states,st),PageBreak()]
+
+
+
+    # ════════════════════════════════════════════════════════
+
+    # PAGE 9 — NAVIGATION MAP + API REFERENCE
+
+    # ════════════════════════════════════════════════════════
+
+    story+=[SectionBanner('Complete Navigation Map — Community Tab',
+
+            'Every connection into, within, and out of the Community tab')]
+
+    story+=[Spacer(1,8)]
+
+
+
+    story+=[Paragraph('Inbound connections',st['h2'])]
+
+    inbound=[
+
+        [Paragraph('From',st['th']),Paragraph('Action',st['th']),
+
+         Paragraph('Arrives at',st['th']),Paragraph('Transition',st['th'])],
+
+        [Paragraph('Nav bar tap',st['tdb']),
+
+         Paragraph('Community (⊕) tap',st['td']),
+
+         Paragraph('Quest Board (8) — Quests segment',st['td']),
+
+         Paragraph('Instant',st['td'])],
+
+        [Paragraph('Dashboard',st['tdb']),
+
+         Paragraph('Quest card tap',st['td']),
+
+         Paragraph('Quest Board (8)',st['td']),
+
+         Paragraph('Push left',st['td'])],
+
+        [Paragraph('Mode Selection (6A)',st['tdb']),
+
+         Paragraph('"Contribute Now" after session',st['td']),
+
+         Paragraph('Quest Board (8)',st['td']),
+
+         Paragraph('Push left',st['td'])],
+
+        [Paragraph('Session Summary overlay',st['tdb']),
+
+         Paragraph('"What\'s next" chip — group quest',st['td']),
+
+         Paragraph('Quest Detail (QD)',st['td']),
+
+         Paragraph('Push left',st['td'])],
+
+    ]
+
+    story+=[bt(inbound,[34*mm,46*mm,54*mm,26*mm]),Spacer(1,10)]
+
+
+
+    story+=[Paragraph('Internal connections (within Community tab)',st['h2'])]
+
+    internal=[
+
+        [Paragraph('From',st['th']),Paragraph('Action',st['th']),
+
+         Paragraph('To',st['th']),Paragraph('Transition',st['th'])],
+
+        [Paragraph('Quest Board (8)',st['tdb']),
+
+         Paragraph('"Discover" segment tap',st['td']),
+
+         Paragraph('Discover Feed (DF) — same screen',st['td']),
+
+         Paragraph('Cross-dissolve 150ms',st['td'])],
+
+        [Paragraph('Quest Board (8)',st['tdb']),
+
+         Paragraph('"Groups" segment tap',st['td']),
+
+         Paragraph('Study Groups (SG) — same screen',st['td']),
+
+         Paragraph('Cross-dissolve 150ms',st['td'])],
+
+        [Paragraph('Quest Board (8)',st['tdb']),
+
+         Paragraph('Quest card tap',st['td']),
+
+         Paragraph('Quest Detail (QD)',st['td']),
+
+         Paragraph('Push left',st['td'])],
+
+        [Paragraph('Quest Board (8)',st['tdb']),
+
+         Paragraph('"Active"/"Completed" toggle',st['td']),
+
+         Paragraph('Same screen — quest list filter',st['td']),
+
+         Paragraph('Cross-dissolve 150ms',st['td'])],
+
+        [Paragraph('Quest Board (8)',st['tdb']),
+
+         Paragraph('"Join or Create" button',st['td']),
+
+         Paragraph('Create/Join Group (CG)',st['td']),
+
+         Paragraph('Push left',st['td'])],
+
+        [Paragraph('Quest Detail (QD)',st['tdb']),
+
+         Paragraph('"Open Workspace"',st['td']),
+
+         Paragraph('Live Workspace (LW)',st['td']),
+
+         Paragraph('Push left',st['td'])],
+
+        [Paragraph('Quest Detail (QD)',st['tdb']),
+
+         Paragraph('Back arrow',st['td']),
+
+         Paragraph('Quest Board (8)',st['td']),
+
+         Paragraph('Push right',st['td'])],
+
+        [Paragraph('Discover Feed (DF)',st['tdb']),
+
+         Paragraph('Set card tap',st['td']),
+
+         Paragraph('Set Preview bottom sheet (overlay)',st['td']),
+
+         Paragraph('Slide up overlay',st['td'])],
+
+        [Paragraph('Study Groups (SG)',st['tdb']),
+
+         Paragraph('Group card tap',st['td']),
+
+         Paragraph('Group Detail (GD)',st['td']),
+
+         Paragraph('Push left',st['td'])],
+
+        [Paragraph('Study Groups (SG)',st['tdb']),
+
+         Paragraph('FAB (+)',st['td']),
+
+         Paragraph('Create/Join Group (CG)',st['td']),
+
+         Paragraph('Push left',st['td'])],
+
+        [Paragraph('Group Detail (GD)',st['tdb']),
+
+         Paragraph('"Open Workspace"',st['td']),
+
+         Paragraph('Live Workspace (LW)',st['td']),
+
+         Paragraph('Push left',st['td'])],
+
+        [Paragraph('Group Detail (GD)',st['tdb']),
+
+         Paragraph('Quest card tap',st['td']),
+
+         Paragraph('Quest Detail (QD)',st['td']),
+
+         Paragraph('Push left',st['td'])],
+
+        [Paragraph('Create/Join (CG)',st['tdb']),
+
+         Paragraph('Group created / joined',st['td']),
+
+         Paragraph('Group Detail (GD)',st['td']),
+
+         Paragraph('Push left (replace CG)',st['td'])],
+
+        [Paragraph('Live Workspace (LW)',st['tdb']),
+
+         Paragraph('Back arrow',st['td']),
+
+         Paragraph('Group Detail (GD) or Quest Detail (QD)',st['td']),
+
+         Paragraph('Push right',st['td'])],
+
+    ]
+
+    story+=[bt(internal,[36*mm,46*mm,46*mm,32*mm]),Spacer(1,10)]
+
+
+
+    story+=[Paragraph('Outbound connections (leaving Community tab)',st['h2'])]
+
+    outbound=[
+
+        [Paragraph('From',st['th']),Paragraph('Action',st['th']),
+
+         Paragraph('Destination',st['th']),Paragraph('Tab after',st['th'])],
+
+        [Paragraph('Quest Board (8)\nQuest Detail (QD)',st['tdb']),
+
+         Paragraph('"Contribute Now" CTA',st['td']),
+
+         Paragraph('Mode Selection (6A)',st['td']),
+
+         Paragraph('Study (Tab 2)',st['td'])],
+
+        [Paragraph('Discover Feed (DF)\nSet Preview sheet',st['tdb']),
+
+         Paragraph('"Study Now →" in set preview',st['td']),
+
+         Paragraph('Mode Selection (6A)',st['td']),
+
+         Paragraph('Study (Tab 2)',st['td'])],
+
+    ]
+
+    story+=[bt(outbound,[36*mm,44*mm,48*mm,32*mm]),PageBreak()]
+
+
+
+    # ════════════════════════════════════════════════════════
+
+    # PAGE 10 — API REFERENCE + CHECKLIST
+
+    # ════════════════════════════════════════════════════════
+
+    story+=[SectionBanner('Complete API Reference — Community Tab',color=INDIGO_MID)]
+
+    story+=[Spacer(1,8)]
+
+    all_apis=[
+
+        [Paragraph('Method',st['th']),Paragraph('Endpoint',st['th']),
+
+         Paragraph('Auth',st['th']),Paragraph('Called from',st['th']),
+
+         Paragraph('Purpose',st['th'])],
+
+        [Paragraph('GET',st['tdb']),Paragraph('/users/me/quests',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Quest Board load',st['td']),
+
+         Paragraph('Fetch user\'s active and completed quests',st['td'])],
+
+        [Paragraph('GET',st['tdb']),Paragraph('/quests/{id}',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Quest Detail load',st['td']),
+
+         Paragraph('Full quest data including leaderboard',st['td'])],
+
+        [Paragraph('POST',st['tdb']),Paragraph('/quests/{id}/contribute',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('After study session',st['td']),
+
+         Paragraph('Record XP contribution to quest',st['td'])],
+
+        [Paragraph('WS',st['tdb']),Paragraph('/quests/{id}/progress',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Quest Board, Quest Detail',st['td']),
+
+         Paragraph('Real-time quest progress + leaderboard updates',st['td'])],
+
+        [Paragraph('GET',st['tdb']),Paragraph('/community/sets',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Discover Feed',st['td']),
+
+         Paragraph('Paginated public study sets with filters',st['td'])],
+
+        [Paragraph('POST',st['tdb']),Paragraph('/community/sets/{id}/save',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Discover — save button',st['td']),
+
+         Paragraph('Save public set to user\'s library',st['td'])],
+
+        [Paragraph('POST',st['tdb']),Paragraph('/community/sets/{id}/fork',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Set preview sheet',st['td']),
+
+         Paragraph('Create editable copy in user\'s account',st['td'])],
+
+        [Paragraph('POST',st['tdb']),Paragraph('/community/sets/{id}/rate',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Set preview sheet — star rating',st['td']),
+
+         Paragraph('Submit rating for a public set',st['td'])],
+
+        [Paragraph('POST',st['tdb']),Paragraph('/community/sets/{id}/report',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Set preview — report link',st['td']),
+
+         Paragraph('Flag a public set for review',st['td'])],
+
+        [Paragraph('GET',st['tdb']),Paragraph('/users/me/groups',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Study Groups load',st['td']),
+
+         Paragraph('Fetch all user\'s groups',st['td'])],
+
+        [Paragraph('POST',st['tdb']),Paragraph('/groups',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Create group flow',st['td']),
+
+         Paragraph('Create new group + generate invite code',st['td'])],
+
+        [Paragraph('POST',st['tdb']),Paragraph('/groups/join',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Join group flow',st['td']),
+
+         Paragraph('Join group by invite code',st['td'])],
+
+        [Paragraph('GET',st['tdb']),Paragraph('/groups/{id}',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Group Detail load',st['td']),
+
+         Paragraph('Full group data: members, quests, workspace ID',st['td'])],
+
+        [Paragraph('DELETE',st['tdb']),Paragraph('/groups/{id}/members/{uid}',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Group Detail — leave',st['td']),
+
+         Paragraph('Leave a group',st['td'])],
+
+        [Paragraph('GET',st['tdb']),Paragraph('/workspaces/{id}',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Live Workspace load',st['td']),
+
+         Paragraph('Fetch workspace document + member list',st['td'])],
+
+        [Paragraph('WS',st['tdb']),Paragraph('/workspaces/{id}/sync',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Live Workspace active',st['td']),
+
+         Paragraph('Yjs CRDT sync for live collaborative editing',st['td'])],
+
+        [Paragraph('POST',st['tdb']),Paragraph('/workspaces/{id}/highlights',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Live Workspace highlight action',st['td']),
+
+         Paragraph('Persist user highlight',st['td'])],
+
+        [Paragraph('POST',st['tdb']),Paragraph('/workspaces/{id}/comments',st['td']),
+
+         Paragraph('Bearer',st['td']),Paragraph('Live Workspace comment',st['td']),
+
+         Paragraph('Add inline comment',st['td'])],
+
+    ]
+
+    story+=[bt(all_apis,[14*mm,50*mm,16*mm,40*mm,40*mm]),Spacer(1,10)]
+
+
+
+    # ── CHECKLIST ─────────────────────────────────────────────
+
+    story+=[SectionBanner('Developer Checklist — Community Tab',color=INDIGO)]
+
+    story+=[Spacer(1,8)]
+
+    checklist=[
+
+        [Paragraph('Area',st['th']),Paragraph('Item',st['th']),Paragraph('Done',st['th'])],
+
+        # 3-segment nav
+
+        [Paragraph('Seg nav',st['tdb']),
+
+         Paragraph('"Quests" | "Discover" | "Groups" 3-segment control at top of Community root',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Seg nav',st['tdb']),
+
+         Paragraph('Active segment sliding pill animation (200ms ease-out)',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Seg nav',st['tdb']),
+
+         Paragraph('Content area cross-dissolves on segment switch (150ms)',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Seg nav',st['tdb']),
+
+         Paragraph('Nav bar tap always lands on Quests segment',st['td']),Paragraph('[ ]',st['td'])],
+
+        # Quest Board
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('GET /users/me/quests on Quest Board load',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('Hero quest card: Sky tint, title, group, countdown timer, thick 10px progress bar',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('Progress bar fill = (quest.progress / quest.target) × 100',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('Countdown timer: live countdown, Peach colour when < 2 hours',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('4 overlapping member avatars with "+n" overflow circle',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('"Contribute Now" → Mode Selection with quest set_id (Study tab)',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('Solo quest cards: Volt tint, no member avatars',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('Leaderboard: Volt for rank 1, white rank 2, muted rank 3+',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('WebSocket subscription for live quest progress + leaderboard',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('Progress bar animates to new value on WebSocket update (300ms)',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('Leaderboard reorders with 400ms animation on rank change',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('Quest completed: Sky confetti overlay + trophy + XP bonus',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Quest Board',st['tdb']),
+
+         Paragraph('Empty state: "No active quests" + "Find a Study Group" CTA',st['td']),Paragraph('[ ]',st['td'])],
+
+        # Discover Feed
+
+        [Paragraph('Discover',st['tdb']),
+
+         Paragraph('GET /community/sets with search, filter, sort, pagination',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Discover',st['tdb']),
+
+         Paragraph('Subject filter chips + type toggle (All/Sets/Canvases) + sort selector',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Discover',st['tdb']),
+
+         Paragraph('Set card: subject badge, title, author, rating, save count, save button',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Discover',st['tdb']),
+
+         Paragraph('Save button: optimistic UI toggle (bookmarks fills immediately)',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Discover',st['tdb']),
+
+         Paragraph('Set preview bottom sheet with 3 preview cards + star rating + CTAs',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Discover',st['tdb']),
+
+         Paragraph('"Study Now →" auto-saves then → Mode Selection (Study tab)',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Discover',st['tdb']),
+
+         Paragraph('Report set flow (POST /report)',st['td']),Paragraph('[ ]',st['td'])],
+
+        # Study Groups
+
+        [Paragraph('Groups',st['tdb']),
+
+         Paragraph('GET /users/me/groups on Groups segment load',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Groups',st['tdb']),
+
+         Paragraph('Group cards with active quest badge and online member indicator',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Groups',st['tdb']),
+
+         Paragraph('Create group flow: name + subject → POST /groups → invite code modal',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Groups',st['tdb']),
+
+         Paragraph('Join group: 6-char code input → POST /groups/join → Group Detail',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Groups',st['tdb']),
+
+         Paragraph('Group Detail: members, quests list, workspace CTA, invite code copy',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Groups',st['tdb']),
+
+         Paragraph('Leave group: confirmation → DELETE /groups/{id}/members/{uid}',st['td']),Paragraph('[ ]',st['td'])],
+
+        # Live Workspace
+
+        [Paragraph('Workspace',st['tdb']),
+
+         Paragraph('Yjs + y-websocket for real-time CRDT collaborative editing',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Workspace',st['tdb']),
+
+         Paragraph('Live quest progress bar (WebSocket) at top of workspace',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Workspace',st['tdb']),
+
+         Paragraph('Live member cursors: coloured vertical bar + username nametag pill',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Workspace',st['tdb']),
+
+         Paragraph('Multi-user colour-coded highlights (10% opacity, member colour)',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Workspace',st['tdb']),
+
+         Paragraph('Inline comments: bubble icon + thread sidebar',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Workspace',st['tdb']),
+
+         Paragraph('Member joins toast: Sky-bordered 2s auto-dismiss',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Workspace',st['tdb']),
+
+         Paragraph('Offline: Peach banner + local edit queuing (Yjs handles)',st['td']),Paragraph('[ ]',st['td'])],
+
+        [Paragraph('Workspace',st['tdb']),
+
+         Paragraph('Formatting toolbar: Bold/Italic/Heading/Bullet + Highlight + Comment',st['td']),Paragraph('[ ]',st['td'])],
+
+    ]
+
+    story+=[bt(checklist,[24*mm,122*mm,14*mm])]
+
+    story+=[Spacer(1,12)]
+
+    story+=[HRFlowable(width='100%',thickness=0.4,color=BORDER)]
+
+    story+=[Spacer(1,6)]
+
+    story+=[Paragraph(
+
+        f'myLB — Community Tab Developer Handoff  ·  '
+
+        f'{datetime.date.today().strftime("%d %B %Y")}  ·  Confidential — Internal Use Only',
+
+        ParagraphStyle('fn',fontName='Helvetica',fontSize=7.5,
+
+            textColor=TEXT_LIGHT,alignment=TA_CENTER,leading=11))]
+
+
+
+    doc.build(story,onFirstPage=page_bg,onLaterPages=page_bg)
+
+    print(f'Done: {out}')
+
+
+
+build()} 
