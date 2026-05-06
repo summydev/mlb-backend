@@ -33,14 +33,13 @@ class ResetPasswordRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=72)
 
 class UserProfileUpdate(BaseModel):
-    # Based on the handoff doc: university, professional, high_school, self_improvement
     study_goal: str
 
+class FCMTokenUpdate(BaseModel):
+    fcm_token: str
+
 class PetAdoptionRequest(BaseModel):
-    # Only allow these exact 4 strings
     pet_type: Literal["nova", "pip", "luna", "zap"] 
-    
-    # The Regex pattern ^[a-zA-Z0-9 \-']+$ enforces the character rules perfectly
     pet_name: str = Field(
         ...,
         min_length=1, 
@@ -66,7 +65,7 @@ class PetDashboardInfo(BaseModel):
     xp: int
     xp_to_next: int
     mood: str 
-    xp_history: List[int] # <-- ADD THIS LINE
+    xp_history: List[int]
     
 class StreakInfo(BaseModel):
     days: int
@@ -93,7 +92,6 @@ class DashboardResponse(BaseModel):
     today_plan: List[TodayPlanSession]
     streak: StreakInfo
     greeting: str
-
 
 # ==========================================
 # STUDY PLAN SCHEMAS (SCREEN 9)
@@ -135,7 +133,6 @@ class PlanResponse(BaseModel):
     sessions: List[SessionDetail]
     nudge: Optional[Nudge] = None
 
-# Input schemas for the POST/PATCH routes
 class PlanGenerateRequest(BaseModel):
     goal: str
     deadline: date
@@ -148,8 +145,6 @@ class SessionUpdateRequest(BaseModel):
 class PlanApproveRequest(BaseModel):
     approved: bool
 
-
- 
 # ==========================================
 # AI SOLVE SCHEMAS (SCREEN 10)
 # ==========================================
@@ -160,7 +155,7 @@ class SolveRequest(BaseModel):
 
 class HighlightTerm(BaseModel):
     term: str
-    color: Literal["mint", "peach"] # Spec says mint = #3CFFC8, peach = #FF8A65
+    color: Literal["mint", "peach"]
 
 class SolutionStep(BaseModel):
     step_number: int
@@ -176,7 +171,7 @@ class SolveResponse(BaseModel):
     solution_id: str
     steps: List[SolutionStep]
     canvas_links: List[CanvasLink]
-    confidence_score: float # Float 0-1. App shows warning if < 0.75
+    confidence_score: float
 
 class SolveFeedbackRequest(BaseModel):
     helpful: bool
@@ -185,7 +180,6 @@ class SolveFeedbackRequest(BaseModel):
 # ==========================================
 # CANVAS TAB SCHEMAS (SCREEN 5)
 # ==========================================
-# --- Requests ---
 class NodeCreate(BaseModel):
     label: str = Field(..., max_length=40)
     x: float
@@ -210,9 +204,8 @@ class CanvasCreate(BaseModel):
     name: str
     subject: str
     source_type: Literal["notes", "upload", "manual"] = "manual"
-    source_id: Optional[int] = None # Links to Note ID if generated from notes
+    source_id: Optional[int] = None
 
-# --- Responses ---
 class NodeResponse(BaseModel):
     id: UUID
     label: str
@@ -242,8 +235,6 @@ class CanvasResponse(BaseModel):
     last_studied_at: Optional[datetime] = None
     created_at: datetime
     is_public: bool
-    
-    # These arrays will be populated when viewing the Infinite Canvas
     nodes: List[NodeResponse] = []
     connections: List[ConnectionResponse] = []
 
@@ -251,10 +242,11 @@ class CanvasStatusResponse(BaseModel):
     status: Literal["ready", "processing", "failed"]
     node_count: int
     nodes: List[NodeResponse] = []
+
+
 # ==========================================
 # COLLECTIONS SCHEMAS
 # ==========================================
-
 class VisibilityEnum(str, Enum):
     private = "private"
     shared = "shared"
@@ -265,9 +257,8 @@ class ItemTypeEnum(str, Enum):
     set = "set"
     canvas = "canvas"
 
-# --- Sub-models ---
 class CollectionItem(BaseModel):
-    item_id: str  # Handles both Note IDs (int) and Canvas IDs (UUID)
+    item_id: str 
     item_type: ItemTypeEnum
     position: int
 
@@ -285,7 +276,6 @@ class PendingRequest(BaseModel):
     message: Optional[str] = None
     requested_at: datetime
 
-# --- Request Schemas (Incoming Data) ---
 class CollectionCreate(BaseModel):
     title: str = Field(..., max_length=60)
     subject: str
@@ -293,7 +283,7 @@ class CollectionCreate(BaseModel):
     description: Optional[str] = Field(None, max_length=300)
     cover_emoji: Optional[str] = None
     item_ids: List[str] = []
-    item_types: List[str] = [] # Added this so the backend knows what type each ID is
+    item_types: List[str] = []
 
 class CollectionUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=60)
@@ -312,7 +302,6 @@ class ItemReorderRequest(BaseModel):
 class AccessRequestCreate(BaseModel):
     message: Optional[str] = Field(None, max_length=120)
 
-# --- Response Schemas (Outgoing Data) ---
 class CollectionResponse(BaseModel):
     collection_id: int 
     owner_id: int      

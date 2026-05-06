@@ -5,11 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
 from jose import jwt, JWTError
 import uuid
+import os
+import firebase_admin
+import json
+from firebase_admin import credentials
 from typing import Optional, List
 
 # Database and Models
 from database import create_db_and_tables, get_session, engine
-from models import User, Pet, StudyPlan, StudySession, DailyActivity, Quest # <-- Added Quest
+from models import User, Pet, StudyPlan, StudySession, DailyActivity, Quest 
 
 # Security
 from security import (
@@ -24,28 +28,56 @@ from schemas import (
     DashboardResponse, UserDashboardInfo, PetDashboardInfo, StreakInfo,
     PlanResponse, PlanGenerateRequest, SessionUpdateRequest, PlanApproveRequest,
     SolveRequest, SolveResponse, SolveFeedbackRequest, PlanGoal, TodayPlanSession,
-     PlanStats, WeekDay, SessionDetail # <-- Added TodayPlanSession
+    PlanStats, WeekDay, SessionDetail, FCMTokenUpdate
 )
 
 # AI Service
 from ai_service import generate_deepseek_solution, generate_deepseek_study_plan
-from routers import study, notes, canvas
+
+# Routers
+from routers import collections, community, notifications, study, notes, canvas
 from sqlalchemy import text
-# ... your other app setup ...
 
 
-# This ensures the database tables are created when the app starts
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialize the Database
     create_db_and_tables()
+    
+    # Initialize Firebase Admin SDK securely via Environment Variable or local file
+    firebase_json_str = os.getenv("FIREBASE_CREDENTIALS_JSON")
+    
+    try:
+        if not firebase_admin._apps:
+            if firebase_json_str:
+                cred_dict = json.loads(firebase_json_str)
+                cred = credentials.Certificate(cred_dict)
+                firebase_admin.initialize_app(cred)
+                print("🔥 Firebase initialized from Render ENV VAR!")
+                
+            elif os.path.exists("firebase-credentials.json"):
+                cred = credentials.Certificate("firebase-credentials.json")
+                firebase_admin.initialize_app(cred)
+                print("🔥 Firebase initialized from LOCAL FILE!")
+                
+            else:
+                print("⚠️ Firebase credentials not found. Push notifications disabled.")
+                
+    except Exception as e:
+        print(f"❌ Error initializing Firebase: {e}")
+
     yield
 
-app = FastAPI(title="myLB Auth API", version="1.0", lifespan=lifespan)
+app = FastAPI(title="myLB API", version="1.0", lifespan=lifespan)
 
+# Register all feature routers
 app.include_router(study.router)
 app.include_router(notes.router) 
 app.include_router(canvas.router)
-# Allow Flutter app to communicate with the API
+app.include_router(collections.router)     
+app.include_router(notifications.router)   
+app.include_router(community.router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -54,11 +86,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ==========================================
 # AUTHENTICATION ROUTES
 # ==========================================
-
 @app.post("/auth/register", status_code=status.HTTP_200_OK)
 async def register_user(user_data: UserRegister, session: Session = Depends(get_session)):
     email = user_data.email.lower()
@@ -160,22 +190,19 @@ async def reset_password(request: ResetPasswordRequest, session: Session = Depen
     session.commit()
     return {"message": "Password updated successfully."}
 
-
-
 @app.get("/fix-db")
 def fix_database_schema(db: Session = Depends(get_session)):
     try:
-        # This forcefully adds the missing column to your live database
         db.exec(text('ALTER TABLE flashcard ADD COLUMN IF NOT EXISTS note_id INTEGER REFERENCES note(id);'))
+        db.exec(text('ALTER TABLE user ADD COLUMN IF NOT EXISTS fcm_token VARCHAR;'))
         db.commit()
-        return {"message": "Success! The note_id column has been added to the flashcard table."}
+        return {"message": "Database schema updated successfully."}
     except Exception as e:
         return {"error": str(e)}
 
 # ==========================================
-# PROTECTED ONBOARDING ROUTES
+# PROTECTED ONBOARDING & USER ROUTES
 # ==========================================
-
 @app.patch("/users/me/profile", status_code=status.HTTP_200_OK)
 async def update_user_profile(
     profile_data: UserProfileUpdate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
@@ -207,17 +234,26 @@ async def complete_tooltip_tour(
     session.commit()
     return {"message": "User session status updated successfully."}
 
+@app.patch("/users/me/fcm-token", status_code=status.HTTP_200_OK)
+async def update_fcm_token(
+    payload: FCMTokenUpdate, 
+    current_user: User = Depends(get_current_user), 
+    session: Session = Depends(get_session)
+):
+    """Saves the user's latest device token for Firebase Push Notifications."""
+    current_user.fcm_token = payload.fcm_token
+    session.add(current_user)
+    session.commit()
+    return {"message": "FCM token updated successfully"}
 
 # ==========================================
 # MAIN DASHBOARD (HOME TAB)
 # ==========================================
-
 @app.get("/users/me/dashboard", response_model=DashboardResponse, status_code=status.HTTP_200_OK)
 async def get_dashboard(
     current_user: User = Depends(get_current_user), 
     session: Session = Depends(get_session)
 ):
-    # 1. Greeting & User Info
     hour = datetime.now().hour
     greeting = "Good morning" if hour < 12 else "Good afternoon" if hour < 18 else "Good evening"
     user_info = UserDashboardInfo(
@@ -225,7 +261,6 @@ async def get_dashboard(
         is_first_session=current_user.is_first_session 
     )
 
-    # 2. XP History & Streak (Real Data)
     today_str = datetime.now().date().isoformat()
     last_7_days = [(datetime.now().date() - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
     
@@ -236,11 +271,9 @@ async def get_dashboard(
     xp_map = {activity.date: activity.xp_earned for activity in activities}
     real_xp_history = [xp_map.get(day, 0) for day in last_7_days]
     
-    # If they earned XP today, streak is active!
     streak_active = bool(xp_map.get(today_str, 0) > 0)
     streak_info = StreakInfo(days=0, active_today=streak_active)
 
-    # 3. Pet Data
     pet = session.exec(select(Pet).where(Pet.user_id == current_user.id)).first()
     if pet:
         pet_info = PetDashboardInfo(
@@ -250,7 +283,6 @@ async def get_dashboard(
     else:
         pet_info = PetDashboardInfo(name="Nova", type="nova", level=1, xp=0, xp_to_next=1200, mood="happy", xp_history=[0]*7)
 
-    # 4. Today's Plan Data (Real Data)
     today_sessions = session.exec(select(StudySession).where(
         StudySession.user_id == current_user.id, StudySession.date == today_str, StudySession.completed == False
     ).limit(4)).all()
@@ -260,7 +292,6 @@ async def get_dashboard(
         for s in today_sessions
     ]
 
-    # 5. Active Quests (Real Data)
     db_quests = session.exec(select(Quest).where(Quest.user_id == current_user.id).limit(3)).all()
     real_quests = [
         {
@@ -274,34 +305,26 @@ async def get_dashboard(
         today_plan=real_today_plan, streak=streak_info, greeting=greeting
     )
 
-
 # ==========================================
 # STUDY PLAN ROUTES (SCREEN 9)
 # ==========================================
-
-
 @app.get("/users/me/plan", response_model=Optional[PlanResponse], status_code=status.HTTP_200_OK)
 async def get_study_plan(
     current_user: User = Depends(get_current_user), 
     session: Session = Depends(get_session)
 ):
-    # 1. Fetch the user's most recently generated plan
     statement = select(StudyPlan).where(StudyPlan.user_id == current_user.id).order_by(StudyPlan.id.desc())
     db_plan = session.exec(statement).first()
 
-    # If they have no plan in the database, return None to show the Goal Setup UI
     if not db_plan:
         return None 
 
-    # 2. Fetch all study sessions linked to this plan
     sessions_statement = select(StudySession).where(StudySession.plan_id == db_plan.id)
     db_sessions = session.exec(sessions_statement).all()
 
-    # 3. Calculate the stats required by the UI
     today = datetime.now().date()
     days_remaining = (db_plan.deadline - today).days
     
-    # Calculate a rough daily target based on the generated sessions
     total_duration = sum(s.duration_mins for s in db_sessions)
     daily_target = total_duration // len(db_sessions) if db_sessions else 60
 
@@ -311,43 +334,30 @@ async def get_study_plan(
         topics_count=len(db_sessions)
     )
 
-    # 4. Construct the 7-day week array for the UI day-strip
     week = []
     for i in range(7):
         current_date = today + timedelta(days=i)
         date_str = current_date.isoformat()
         
-        # Check if there is a session scheduled for this specific date
         day_session = next((s for s in db_sessions if s.date == date_str), None)
         
         week.append(WeekDay(
             date=date_str,
-            day_label=current_date.strftime("%a").upper(), # e.g., "MON", "TUE"
+            day_label=current_date.strftime("%a").upper(),
             has_session=bool(day_session),
             session_type="study" if day_session else "rest"
         ))
 
-    # 5. Format the sessions for the Flutter app
     formatted_sessions = [
         SessionDetail(
-            id=str(s.id),
-            date=s.date,
-            time=s.time or "16:00",
-            subject=s.subject,
-            duration_mins=s.duration_mins,
-            mode=s.mode,
-            priority=s.priority,
-            completed=s.completed
+            id=str(s.id), date=s.date, time=s.time or "16:00", subject=s.subject,
+            duration_mins=s.duration_mins, mode=s.mode, priority=s.priority, completed=s.completed
         ) for s in db_sessions
     ]
 
-    # 6. Return the fully assembled plan
     return PlanResponse(
         goal=PlanGoal(subject=db_plan.subject, deadline=db_plan.deadline),
-        stats=stats,
-        week=week,
-        sessions=formatted_sessions,
-        nudge=None
+        stats=stats, week=week, sessions=formatted_sessions, nudge=None
     )
 
 @app.post("/users/me/plan/generate", response_model=PlanResponse, status_code=status.HTTP_200_OK)
@@ -414,7 +424,6 @@ async def approve_study_plan(
 # ==========================================
 # AI SOLVE ROUTES (SCREEN 10)
 # ==========================================
-
 @app.post("/solve", response_model=SolveResponse, status_code=status.HTTP_200_OK)
 async def solve_question(request: SolveRequest, current_user: User = Depends(get_current_user)):
     if not request.question_text:

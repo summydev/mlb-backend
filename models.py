@@ -3,9 +3,6 @@ from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List
 from datetime import date, datetime
 from enum import Enum
- 
- 
- 
 
 # ==========================================
 # ENUMS
@@ -40,6 +37,7 @@ class User(SQLModel, table=True):
     # Profile Settings
     study_goal: Optional[str] = None
     is_first_session: bool = True
+    fcm_token: Optional[str] = Field(default=None) # Used for Firebase Push Notifications
     
     # Relationships
     pets: List["Pet"] = Relationship(back_populates="user")
@@ -237,8 +235,6 @@ class CanvasNode(SQLModel, table=True):
     canvas: Optional["Canvas"] = Relationship(back_populates="nodes")
     flashcard: Optional["Flashcard"] = Relationship(back_populates="canvas_nodes")
     
-    # We use sa_relationship_kwargs to tell SQLAlchemy exactly which foreign keys to use
-    # to prevent ambiguity errors when building the connection graph
     outgoing_connections: List["CanvasConnection"] = Relationship(
         back_populates="from_node",
         sa_relationship_kwargs={"foreign_keys": "[CanvasConnection.from_node_id]", "cascade": "all, delete-orphan"}
@@ -267,7 +263,7 @@ class CanvasConnection(SQLModel, table=True):
         sa_relationship_kwargs={"foreign_keys": "[CanvasConnection.to_node_id]"}
     )
 
-    # ==========================================
+# ==========================================
 # COLLECTIONS MODELS
 # ==========================================
 
@@ -287,19 +283,13 @@ class Collection(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-    # Relationships (Optional but helpful)
-    # items: List["CollectionItem"] = Relationship(back_populates="collection")
-
 class CollectionItem(SQLModel, table=True):
     """Mapping table linking a Collection to Notes, Sets, or Canvases"""
     id: Optional[int] = Field(default=None, primary_key=True)
     collection_id: int = Field(foreign_key="collection.id")
     
     item_type: str # "note", "set", "canvas"
-    
-    # We store item_id as a String because Note/Set use Int, but Canvas uses UUID!
     item_id: str 
-    
     position: int = Field(default=0) # For drag-and-drop reordering
 
 class CollectionAccess(SQLModel, table=True):
