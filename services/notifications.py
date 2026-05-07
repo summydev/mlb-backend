@@ -6,7 +6,6 @@ def send_collection_notification(db: Session, user_id: int, title: str, body: st
     """
     Saves an in-app notification and triggers a Firebase Cloud Messaging push notification.
     """
-    # 1. Save to database for the in-app notification feed
     new_notif = Notification(
         user_id=user_id,
         title=title,
@@ -15,7 +14,6 @@ def send_collection_notification(db: Session, user_id: int, title: str, body: st
     )
     db.add(new_notif)
     
-    # 2. Fetch the target user to get their FCM token
     target_user = db.get(User, user_id)
     
     # 3. Trigger Firebase Push Notification
