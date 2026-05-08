@@ -193,8 +193,9 @@ async def reset_password(request: ResetPasswordRequest, session: Session = Depen
 @app.get("/fix-db")
 def fix_database_schema(db: Session = Depends(get_session)):
     try:
-        db.exec(text('ALTER TABLE flashcard ADD COLUMN IF NOT EXISTS note_id INTEGER REFERENCES note(id);'))
-        db.exec(text('ALTER TABLE user ADD COLUMN IF NOT EXISTS fcm_token VARCHAR;'))
+        # Wrap table names in double quotes for PostgreSQL
+        db.exec(text('ALTER TABLE "flashcard" ADD COLUMN IF NOT EXISTS note_id INTEGER REFERENCES "note"(id);'))
+        db.exec(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS fcm_token VARCHAR;'))
         db.commit()
         return {"message": "Database schema updated successfully."}
     except Exception as e:
