@@ -73,9 +73,9 @@ async def get_my_collections(
         "has_more": total_count > (offset + limit)
     }
 
-# ==========================================
+ 
 # 2. CREATE & EDIT COLLECTION
-# ==========================================
+ 
 @router.post("/collections", status_code=status.HTTP_201_CREATED)
 async def create_collection(
     payload: CollectionCreate,
@@ -167,9 +167,9 @@ async def delete_collection(
     return {"message": "Collection deleted successfully. Your items are safe."}
 
 
-# ==========================================
+ 
 # 3. MANAGE ITEMS IN A COLLECTION
-# ==========================================
+ 
 @router.post("/collections/{collection_id}/items", status_code=status.HTTP_200_OK)
 async def add_item_to_collection(
     collection_id: int, payload: ItemAddRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
