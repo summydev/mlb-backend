@@ -11,7 +11,7 @@ from openai import AsyncOpenAI
 # Database, Models, and Authentication
 from database import get_session
 from security import get_current_user 
-from models import User, Note, Flashcard, StudySet
+from models import CollectionAccess, CollectionItem, User, Note, Flashcard, StudySet
 
 router = APIRouter(tags=["Notes Section"])
 
@@ -225,16 +225,50 @@ async def create_note(
 # ==========================================
 @router.get("/notes/{note_id}", status_code=status.HTTP_200_OK)
 async def get_note(
-    note_id: int,
-    current_user: User = Depends(get_current_user),
+    note_id: int, 
+    current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
 ):
-    """Fetch full note content and metadata for Note Detail screen."""
+    # 1. Fetch item by ID only
     note = db.get(Note, note_id)
-    if not note or note.user_id != current_user.id:
+    if not note:
         raise HTTPException(status_code=404, detail="Note not found")
-    return note
 
+    is_owner = False
+
+    # 2. Check Authorization
+    if note.user_id == current_user.id:
+        # Condition A: User is the owner
+        is_owner = True
+    
+    elif getattr(note, "is_public", False):
+        # Condition B: Note is explicitly marked public
+        is_owner = False
+    
+    else:
+        # Condition C: Check if note is inside a shared collection the user has access to
+        has_shared_access = db.exec(
+            select(CollectionAccess)
+            .join(CollectionItem, CollectionItem.collection_id == CollectionAccess.collection_id)
+            .where(
+                CollectionItem.item_type == "note",
+                CollectionItem.item_id == str(note.id),
+                CollectionAccess.user_id == current_user.id
+            )
+        ).first()
+
+        if has_shared_access:
+            is_owner = False
+        else:
+            # If not owner, not public, and not in a shared collection: deny access
+            # (Returning 404 instead of 403 is safer to hide item existence from unauthorized users)
+            raise HTTPException(status_code=404, detail="Note not found")
+
+    # 3. Return payload with the is_owner flag
+    response_data = note.model_dump()
+    response_data["is_owner"] = is_owner
+
+    return response_data
 # ==========================================
 # 4. UPDATE NOTE
 # ==========================================

@@ -11,7 +11,7 @@ import os
 
 # Import your schemas and models
 from schemas import CanvasCreate, CanvasResponse, CanvasStatusResponse, NodeCreate, NodeResponse
-from models import Canvas, CanvasNode, CanvasConnection, CanvasSourceType, Note
+from models import Canvas, CanvasNode, CanvasConnection, CanvasSourceType, CollectionAccess, CollectionItem, Note
 from security import get_current_user
 from models import User
 from database import get_session 
@@ -247,28 +247,59 @@ def add_node_to_canvas(
     db.commit()
     db.refresh(db_node)
     return db_node
-
 @router.get("/canvases/{canvas_id}", status_code=200)
-def get_single_canvas(
+async def get_single_canvas(
     canvas_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
-    """Fetch a single canvas, including all its nodes and connections."""
-    canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id, Canvas.user_id == current_user.id)).first()
+    """Fetch a single canvas, including all its nodes and connections, with guest access logic."""
+    # 1. Fetch item by ID only
+    canvas = db.get(Canvas, canvas_id)
     if not canvas:
         raise HTTPException(status_code=404, detail="Canvas not found")
 
-    nodes = db.exec(select(CanvasNode).where(CanvasNode.canvas_id == canvas_id)).all()
-    connections = db.exec(select(CanvasConnection).where(CanvasConnection.canvas_id == canvas_id)).all()
+    is_owner = False
 
-    return {
-        "id": canvas.id,
-        "name": canvas.name,
-        "subject": canvas.subject,
-        "nodes": nodes,
-        "connections": connections
-    }
+    # 2. Check Authorization
+    if canvas.user_id == current_user.id:
+        # Condition A: User is the owner
+        is_owner = True
+        
+    elif getattr(canvas, "is_public", False):
+        # Condition B: Canvas is explicitly marked public
+        is_owner = False
+        
+    else:
+        # Condition C: Check if canvas is inside a shared collection the user has access to
+        has_shared_access = db.exec(
+            select(CollectionAccess)
+            .join(CollectionItem, CollectionItem.collection_id == CollectionAccess.collection_id)
+            .where(
+                CollectionItem.item_type == "canvas",
+                CollectionItem.item_id == str(canvas.id),
+                CollectionAccess.user_id == current_user.id
+            )
+        ).first()
+
+        if has_shared_access:
+            is_owner = False
+        else:
+            # If not owner, not public, and not in a shared collection: deny access
+            # (Returning 404 instead of 403 to hide item existence from unauthorized users)
+            raise HTTPException(status_code=404, detail="Canvas not found")
+
+    # 3. Fetch nested items (Nodes and Connections)
+    nodes = db.exec(select(CanvasNode).where(CanvasNode.canvas_id == canvas.id)).all()
+    connections = db.exec(select(CanvasConnection).where(CanvasConnection.canvas_id == canvas.id)).all()
+
+    # 4. Construct response with the is_owner flag
+    response_data = canvas.model_dump()
+    response_data["is_owner"] = is_owner
+    response_data["nodes"] = nodes
+    response_data["connections"] = connections
+
+    return response_data
 
 # 6. DELETE CANVAS (SAFE CASCADE DELETE)
 @router.delete("/canvases/{canvas_id}", status_code=200)

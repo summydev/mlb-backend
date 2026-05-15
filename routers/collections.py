@@ -73,7 +73,7 @@ async def get_my_collections(
         "has_more": total_count > (offset + limit)
     }
 
- 
+  
 # 2. CREATE & EDIT COLLECTION
  
 @router.post("/collections", status_code=status.HTTP_201_CREATED)
@@ -107,16 +107,36 @@ async def get_collection_detail(
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
 ):
-    collection = db.get(Collection, collection_id)
-    if not collection: raise HTTPException(status_code=404, detail="Collection not found")
-        
-    if collection.user_id != current_user.id and collection.visibility != "public":
-        access = db.exec(select(CollectionAccess).where(CollectionAccess.collection_id == collection.id, CollectionAccess.user_id == current_user.id)).first()
-        if not access: raise HTTPException(status_code=403, detail="You do not have access to this collection")
+    # 1. Fetch collection AND owner using a JOIN to avoid extra queries
+    statement = (
+        select(Collection, User)
+        .join(User, Collection.user_id == User.id)
+        .where(Collection.id == collection_id)
+    )
+    result = db.exec(statement).first()
 
-    item_mappings = db.exec(select(CollectionItem).where(CollectionItem.collection_id == collection.id).order_by(CollectionItem.position)).all()
-    resolved_items = []
+    if not result: 
+        raise HTTPException(status_code=404, detail="Collection not found")
+        
+    collection, owner = result
+
+    # 2. Security: Check if user is owner, OR it's public, OR they are in the access list
+    if collection.user_id != current_user.id and collection.visibility != "public":
+        access = db.exec(select(CollectionAccess).where(
+            CollectionAccess.collection_id == collection.id, 
+            CollectionAccess.user_id == current_user.id
+        )).first()
+        if not access: 
+            raise HTTPException(status_code=403, detail="You do not have access to this collection")
+
+    # 3. Fetch and resolve mapping rows (Notes, Sets, Canvases)
+    item_mappings = db.exec(
+        select(CollectionItem)
+        .where(CollectionItem.collection_id == collection.id)
+        .order_by(CollectionItem.position)
+    ).all()
     
+    resolved_items = []
     for mapping in item_mappings:
         if mapping.item_type == "note":
             note = db.get(Note, int(mapping.item_id))
@@ -129,7 +149,11 @@ async def get_collection_detail(
             canvas = db.get(Canvas, uuid.UUID(mapping.item_id))
             if canvas: resolved_items.append({"id": str(canvas.id), "type": "canvas", "title": canvas.name, "node_count": canvas.node_count})
 
-    return {"collection": collection, "items": resolved_items}
+    # 4. Convert collection to a dictionary and inject the owner's username
+    response_data = collection.model_dump()
+    response_data["owner_username"] = owner.name
+
+    return {"collection": response_data, "items": resolved_items}
 
 @router.patch("/collections/{collection_id}", status_code=status.HTTP_200_OK)
 async def update_collection_settings(
