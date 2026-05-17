@@ -1,6 +1,6 @@
 # routers/study.py
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session, select, or_  # <-- Added or_
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 # Database, Models, and Authentication
 from database import get_session
 from security import get_current_user
-from models import User, StudySet, Flashcard, FeynmanSession, DailyActivity, Pet
+from models import User, StudySet, Flashcard, FeynmanSession, DailyActivity, Pet, Collection, CollectionItem, CollectionAccess # <-- Added Collection models
 
 load_dotenv() # Ensure env variables are loaded
 
@@ -71,9 +71,37 @@ async def get_study_set(
     db: Session = Depends(get_session)
 ):
     study_set = db.get(StudySet, set_id)
-    if not study_set or study_set.user_id != current_user.id:
+    if not study_set:
         raise HTTPException(status_code=404, detail="Study set not found")
-    return study_set
+
+    is_owner = False
+
+    if study_set.user_id == current_user.id:
+        is_owner = True
+    else:
+        has_access = db.exec(
+            select(CollectionItem.id)
+            .join(Collection, Collection.id == CollectionItem.collection_id)
+            .outerjoin(CollectionAccess, CollectionAccess.collection_id == Collection.id)
+            .where(
+                CollectionItem.item_type == "set",
+                CollectionItem.item_id == str(study_set.id),
+                or_(
+                    Collection.visibility == "public",
+                    CollectionAccess.user_id == current_user.id
+                )
+            )
+        ).first()
+
+        if has_access:
+            is_owner = False
+        else:
+            raise HTTPException(status_code=404, detail="Study set not found")
+
+    response_data = study_set.model_dump()
+    response_data["is_owner"] = is_owner
+
+    return response_data
 
 @router.delete("/sets/{set_id}", status_code=200)
 async def delete_study_set(
@@ -116,9 +144,33 @@ async def get_flashcards(
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
 ):
-    # Verify ownership before fetching cards
     study_set = db.get(StudySet, set_id)
-    if not study_set or study_set.user_id != current_user.id:
+    if not study_set:
+        raise HTTPException(status_code=404, detail="Study set not found")
+
+    has_access = False
+
+    if study_set.user_id == current_user.id:
+        has_access = True
+    else:
+        shared = db.exec(
+            select(CollectionItem.id)
+            .join(Collection, Collection.id == CollectionItem.collection_id)
+            .outerjoin(CollectionAccess, CollectionAccess.collection_id == Collection.id)
+            .where(
+                CollectionItem.item_type == "set",
+                CollectionItem.item_id == str(study_set.id),
+                or_(
+                    Collection.visibility == "public",
+                    CollectionAccess.user_id == current_user.id
+                )
+            )
+        ).first()
+        
+        if shared:
+            has_access = True
+
+    if not has_access:
         raise HTTPException(status_code=404, detail="Study set not found")
 
     query = select(Flashcard).where(Flashcard.study_set_id == set_id)

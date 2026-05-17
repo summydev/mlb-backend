@@ -1,6 +1,6 @@
 # routers/notes.py
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
-from sqlmodel import Session, select, func, or_  # <-- Added or_ here
+from sqlmodel import Session, select, func, or_
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -11,7 +11,7 @@ from openai import AsyncOpenAI
 # Database, Models, and Authentication
 from database import get_session
 from security import get_current_user 
-from models import CollectionAccess, CollectionItem, Collection, User, Note, Flashcard, StudySet # <-- Added Collection here
+from models import CollectionAccess, CollectionItem, Collection, User, Note, Flashcard, StudySet
 
 router = APIRouter(tags=["Notes Section"])
 
@@ -127,7 +127,7 @@ async def generate_cards_bg(note_id: int, user_id: int, options: GenerateCardsOp
             new_card = Flashcard(
                 study_set_id=study_set.id,
                 note_id=note.id,
-                question=c.get("question")[:200], # Truncate to DB limits just in case
+                question=c.get("question")[:200], 
                 answer=c.get("answer")[:400],
                 subject=note.subject,
                 difficulty=c.get("difficulty", "medium")
@@ -161,15 +161,12 @@ async def get_all_notes(
     """Fetch paginated list of all user notes."""
     query = select(Note).where(Note.user_id == current_user.id)
     
-    # 1. Apply Search
     if search:
         query = query.where((Note.title.icontains(search)) | (Note.content_text.icontains(search)))
         
-    # 2. Apply Subject Filter
     if filter.lower() != "all":
         query = query.where(Note.subject.ilike(filter))
         
-    # 3. Apply Sorting
     if sort == "recent":
         query = query.order_by(Note.updated_at.desc())
     elif sort == "created":
@@ -179,11 +176,9 @@ async def get_all_notes(
     elif sort == "most-cards":
         query = query.order_by(Note.card_count.desc())
         
-    # 4. Apply Pagination
     offset = (page - 1) * limit
     notes = db.exec(query.offset(offset).limit(limit)).all()
     
-    # 5. Get Total Count
     total_count = db.exec(select(func.count(Note.id)).where(Note.user_id == current_user.id)).one()
 
     return {
@@ -223,7 +218,6 @@ async def create_note(
 # ==========================================
 # 3. GET NOTE DETAIL
 # ==========================================
- 
 @router.get("/notes/{note_id}", status_code=status.HTTP_200_OK)
 async def get_note(
     note_id: int, 
@@ -241,7 +235,6 @@ async def get_note(
     elif getattr(note, "is_public", False):
         is_owner = False
     else:
-        # Check if note is inside a PUBLIC collection OR a shared collection the user has access to
         has_access = db.exec(
             select(CollectionItem.id)
             .join(Collection, Collection.id == CollectionItem.collection_id)
@@ -303,17 +296,14 @@ async def delete_note(
     db: Session = Depends(get_session)
 ):
     """Delete note and ALL associated flashcards to avoid FK errors."""
-    # 1. Verify Note exists and belongs to the user
     note = db.exec(select(Note).where(Note.id == note_id, Note.user_id == current_user.id)).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
         
-    # 2. Delete all related Flashcards FIRST
     flashcards = db.exec(select(Flashcard).where(Flashcard.note_id == note_id)).all()
     for card in flashcards:
         db.delete(card)
 
-    # 3. Safely delete the Note
     db.delete(note)
     db.commit()
     return {"message": "Note and its flashcards deleted successfully"}
@@ -334,10 +324,8 @@ async def generate_cards(
     if not note or note.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Rough estimate to show the user on the loading screen
     estimated_cards = max(1, note.word_count // 60)
     
-    # Fire off the DeepSeek generation in the background!
     background_tasks.add_task(
         generate_cards_bg, 
         note.id, 
@@ -367,7 +355,6 @@ async def add_manual_card(
     if not note or note.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Find or create a study set for this note
     study_set = db.exec(select(StudySet).where(StudySet.title == f"Set: {note.title}")).first()
     if not study_set:
         study_set = StudySet(user_id=current_user.id, title=f"Set: {note.title}", subject=note.subject)
@@ -399,9 +386,36 @@ async def get_note_cards(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
-    """Note Detail 'See all cards' link."""
+    """Note Detail 'See all cards' link. Uses Collection Sharing Rules."""
     note = db.get(Note, note_id)
-    if not note or note.user_id != current_user.id:
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    has_access = False
+
+    if note.user_id == current_user.id:
+        has_access = True
+    elif getattr(note, "is_public", False):
+        has_access = True
+    else:
+        shared = db.exec(
+            select(CollectionItem.id)
+            .join(Collection, Collection.id == CollectionItem.collection_id)
+            .outerjoin(CollectionAccess, CollectionAccess.collection_id == Collection.id)
+            .where(
+                CollectionItem.item_type == "note",
+                CollectionItem.item_id == str(note.id),
+                or_(
+                    Collection.visibility == "public",
+                    CollectionAccess.user_id == current_user.id
+                )
+            )
+        ).first()
+        
+        if shared:
+            has_access = True
+
+    if not has_access:
         raise HTTPException(status_code=404, detail="Note not found")
 
     cards = db.exec(select(Flashcard).where(Flashcard.note_id == note.id)).all()
