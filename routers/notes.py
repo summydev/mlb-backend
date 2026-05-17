@@ -1,6 +1,6 @@
 # routers/notes.py
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
-from sqlmodel import Session, select, func
+from sqlmodel import Session, select, func, or_  # <-- Added or_ here
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -11,7 +11,7 @@ from openai import AsyncOpenAI
 # Database, Models, and Authentication
 from database import get_session
 from security import get_current_user 
-from models import CollectionAccess, CollectionItem, User, Note, Flashcard, StudySet
+from models import CollectionAccess, CollectionItem, Collection, User, Note, Flashcard, StudySet # <-- Added Collection here
 
 router = APIRouter(tags=["Notes Section"])
 
@@ -224,7 +224,6 @@ async def create_note(
 # 3. GET NOTE DETAIL
 # ==========================================
  
-
 @router.get("/notes/{note_id}", status_code=status.HTTP_200_OK)
 async def get_note(
     note_id: int, 
@@ -266,6 +265,7 @@ async def get_note(
     response_data["is_owner"] = is_owner
 
     return response_data
+
 # ==========================================
 # 4. UPDATE NOTE
 # ==========================================
