@@ -1,6 +1,6 @@
 # routers/study.py
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select, or_  # <-- Added or_
+from sqlmodel import Session, select, or_
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 # Database, Models, and Authentication
 from database import get_session
 from security import get_current_user
-from models import User, StudySet, Flashcard, FeynmanSession, DailyActivity, Pet, Collection, CollectionItem, CollectionAccess # <-- Added Collection models
+from models import User, StudySet, Flashcard, FeynmanSession, DailyActivity, Pet, Collection, CollectionItem, CollectionAccess
 
 load_dotenv() # Ensure env variables are loaded
 
@@ -98,8 +98,12 @@ async def get_study_set(
         else:
             raise HTTPException(status_code=404, detail="Study set not found")
 
+    # Fetch the cards to attach to the response
+    cards = db.exec(select(Flashcard).where(Flashcard.study_set_id == study_set.id)).all()
+
     response_data = study_set.model_dump()
     response_data["is_owner"] = is_owner
+    response_data["cards"] = cards # <-- Cards attached here!
 
     return response_data
 
@@ -260,8 +264,8 @@ async def complete_flashcard_session(
         "session_summary": {
             "xp_earned": base_xp,
             "pet_xp": pet_xp_awarded,
-            "pet_type": pet_type,    # <-- DYNAMIC PET DATA
-            "pet_level": pet_level,  # <-- DYNAMIC PET DATA
+            "pet_type": pet_type,
+            "pet_level": pet_level,
             "streak_updated": True, 
             "next_suggestions": [
                 {"label": "Tackle your weak cards", "action_type": "review_weak"},
@@ -453,8 +457,8 @@ async def complete_feynman_session(
         "session_summary": {
             "xp_earned": base_xp,
             "pet_xp": pet_xp,
-            "pet_type": pet_type,   # <-- DYNAMIC PET DATA
-            "pet_level": pet_level, # <-- DYNAMIC PET DATA
+            "pet_type": pet_type,
+            "pet_level": pet_level,
             "comprehension_score": payload.final_score,
             "next_suggestions": [
                 {"label": "Review your gaps", "action_type": "review_gaps"}
