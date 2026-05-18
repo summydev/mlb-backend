@@ -15,7 +15,7 @@ from database import get_session
 from security import get_current_user
 from models import User, StudySet, Flashcard, FeynmanSession, DailyActivity, Pet, Collection, CollectionItem, CollectionAccess
 
-load_dotenv()  
+load_dotenv() # Ensure env variables are loaded
 
 router = APIRouter(prefix="/study", tags=["Study Tab"])
 
@@ -274,7 +274,9 @@ async def complete_flashcard_session(
         }
     }
 
- 
+# ==========================================
+# 7: FEYNMAN MODE (AI CHAT) ENDPOINTS
+# ==========================================
 
 @router.post("/feynman/start")
 async def start_feynman_session(
