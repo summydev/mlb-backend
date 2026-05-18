@@ -15,7 +15,7 @@ from database import get_session
 from security import get_current_user
 from models import User, StudySet, Flashcard, FeynmanSession, DailyActivity, Pet, Collection, CollectionItem, CollectionAccess
 
-load_dotenv() # Ensure env variables are loaded
+load_dotenv()  
 
 router = APIRouter(prefix="/study", tags=["Study Tab"])
 
@@ -245,7 +245,7 @@ async def complete_flashcard_session(
         pet_type = pet.pet_type
         pet_level = pet.level
 
-    # 2. Update Daily Activity (Real Streak Data)
+     
     today_str = datetime.now().date().isoformat()
     daily_activity = db.exec(select(DailyActivity).where(
         DailyActivity.user_id == current_user.id, 
@@ -274,9 +274,7 @@ async def complete_flashcard_session(
         }
     }
 
-# ==========================================
-# 7: FEYNMAN MODE (AI CHAT) ENDPOINTS
-# ==========================================
+ 
 
 @router.post("/feynman/start")
 async def start_feynman_session(
