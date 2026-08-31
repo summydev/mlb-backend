@@ -1,0 +1,47 @@
+# services/gamification.py
+from sqlmodel import Session, select
+from datetime import datetime
+from models import User, UserTrophy, StudySession, DailyActivity, Collection
+
+# A static dictionary of all possible trophies in your app
+TROPHY_DICTIONARY = {
+    "streak_3": {"title": "On a Roll", "description": "Hit a 3-day study streak", "icon": "🔥"},
+    "streak_7": {"title": "Scholar", "description": "Hit a 7-day study streak", "icon": "⚡"},
+    "feynman_first": {"title": "The Teacher", "description": "Complete your first Feynman session", "icon": "🧠"},
+    "collection_creator": {"title": "Curator", "description": "Create your first collection", "icon": "📚"},
+}
+
+def check_and_award_trophies(user: User, db: Session):
+    """
+    Evaluates the user's current stats against the trophy rules.
+    Awards any new trophies they have earned.
+    """
+    newly_earned = []
+    
+    # Fetch trophies the user already has so we don't award them twice
+    existing_trophies = db.exec(
+        select(UserTrophy.trophy_id).where(UserTrophy.user_id == user.id)
+    ).all()
+    earned_set = set(existing_trophies)
+
+    # 🏆 RULE 1: STREAKS
+    if user.current_streak >= 3 and "streak_3" not in earned_set:
+        _award(user.id, "streak_3", db, newly_earned)
+        
+    if user.current_streak >= 7 and "streak_7" not in earned_set:
+        _award(user.id, "streak_7", db, newly_earned)
+
+    # 🏆 RULE 2: COLLECTIONS
+    if "collection_creator" not in earned_set:
+        collection_count = db.exec(select(Collection).where(Collection.user_id == user.id)).all()
+        if len(collection_count) > 0:
+            _award(user.id, "collection_creator", db, newly_earned)
+
+    db.commit()
+    return newly_earned
+
+def _award(user_id: int, trophy_id: str, db: Session, tracker_list: list):
+    """Helper to insert the trophy and track it for notifications"""
+    new_trophy = UserTrophy(user_id=user_id, trophy_id=trophy_id)
+    db.add(new_trophy)
+    tracker_list.append(TROPHY_DICTIONARY[trophy_id])
