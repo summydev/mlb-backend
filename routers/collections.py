@@ -3,6 +3,7 @@ from sqlmodel import Session, select, func
 from typing import List, Optional
 from pydantic import BaseModel
 import uuid
+
 # Database, Models, and Auth
 from database import get_session
 from security import get_current_user
@@ -49,8 +50,9 @@ class ReportRequest(BaseModel):
 # ==========================================
 # 1. MY COLLECTIONS LIBRARY (COL-L)
 # ==========================================
+# FIXED: Removed async for synchronous database operations
 @router.get("/users/me/collections", status_code=status.HTTP_200_OK)
-async def get_my_collections(
+def get_my_collections(
     search: Optional[str] = None,
     sort: str = Query("recent"),
     page: int = Query(1, ge=1),
@@ -78,7 +80,7 @@ async def get_my_collections(
 # 2. CREATE & EDIT COLLECTION
 # ==========================================
 @router.post("/collections", status_code=status.HTTP_201_CREATED)
-async def create_collection(
+def create_collection(
     payload: CollectionCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
@@ -103,7 +105,7 @@ async def create_collection(
     return {"collection_id": new_collection.id, "share_token": new_collection.share_token, "message": "Collection created successfully"}
 
 @router.get("/collections/{collection_id}", status_code=status.HTTP_200_OK)
-async def get_collection_detail(
+def get_collection_detail(
     collection_id: int, 
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
@@ -146,7 +148,6 @@ async def get_collection_detail(
             study_set = db.get(StudySet, int(mapping.item_id))
             if study_set: resolved_items.append({"id": str(study_set.id), "type": "set", "title": study_set.title, "card_count": study_set.card_count})
         elif mapping.item_type == "canvas":
-            import uuid
             canvas = db.get(Canvas, uuid.UUID(mapping.item_id))
             if canvas: resolved_items.append({"id": str(canvas.id), "type": "canvas", "title": canvas.name, "node_count": canvas.node_count})
 
@@ -157,13 +158,14 @@ async def get_collection_detail(
     return {"collection": response_data, "items": resolved_items}
 
 @router.patch("/collections/{collection_id}", status_code=status.HTTP_200_OK)
-async def update_collection_settings(
+def update_collection_settings(
     collection_id: int, payload: CollectionUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     collection = db.get(Collection, collection_id)
     if not collection or collection.user_id != current_user.id: raise HTTPException(status_code=404)
 
-    update_data = payload.dict(exclude_unset=True)
+    # FIXED: Replaced deprecated .dict() with .model_dump()
+    update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items(): setattr(collection, key, value)
         
     db.add(collection)
@@ -172,7 +174,7 @@ async def update_collection_settings(
     return {"message": "Collection updated successfully"}
 
 @router.delete("/collections/{collection_id}", status_code=status.HTTP_200_OK)
-async def delete_collection(
+def delete_collection(
     collection_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     collection = db.get(Collection, collection_id)
@@ -196,7 +198,7 @@ async def delete_collection(
 # 3. MANAGE ITEMS IN A COLLECTION
 # ==========================================
 @router.post("/collections/{collection_id}/items", status_code=status.HTTP_200_OK)
-async def add_item_to_collection(
+def add_item_to_collection(
     collection_id: int, payload: ItemAddRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     collection = db.get(Collection, collection_id)
@@ -217,7 +219,7 @@ async def add_item_to_collection(
     return {"message": "Item added successfully"}
 
 @router.patch("/collections/{collection_id}/items", status_code=status.HTTP_200_OK)
-async def reorder_collection_items(
+def reorder_collection_items(
     collection_id: int, payload: ItemReorderRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     collection = db.get(Collection, collection_id)
@@ -239,13 +241,12 @@ async def reorder_collection_items(
 # 4. SHARE SETTINGS: LINKS & INVITES
 # ==========================================
 @router.post("/collections/{collection_id}/share-token/regenerate", status_code=status.HTTP_200_OK)
-async def regenerate_share_token(
+def regenerate_share_token(
     collection_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     collection = db.get(Collection, collection_id)
     if not collection or collection.user_id != current_user.id: raise HTTPException(status_code=404)
 
-    import uuid
     collection.share_token = uuid.uuid4().hex[:12]
     db.add(collection)
     db.commit()
@@ -253,7 +254,7 @@ async def regenerate_share_token(
     return {"new_share_token": collection.share_token}
 
 @router.post("/collections/{collection_id}/invites", status_code=status.HTTP_200_OK)
-async def invite_users_by_email(
+def invite_users_by_email(
     collection_id: int, payload: InviteRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     collection = db.get(Collection, collection_id)
@@ -285,7 +286,7 @@ async def invite_users_by_email(
     return {"invited": invited, "already_had_access": already_had_access, "not_found": not_found}
 
 @router.delete("/collections/{collection_id}/access/{user_id}", status_code=status.HTTP_200_OK)
-async def revoke_access(
+def revoke_access(
     collection_id: int, user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     collection = db.get(Collection, collection_id)
@@ -308,7 +309,7 @@ async def revoke_access(
 # 5. ACCESS REQUESTS 
 # ==========================================
 @router.post("/collections/{collection_id}/requests", status_code=status.HTTP_200_OK)
-async def submit_access_request(
+def submit_access_request(
     collection_id: int, payload: AccessRequestSubmit, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     collection = db.get(Collection, collection_id)
@@ -318,16 +319,14 @@ async def submit_access_request(
         CollectionRequest.collection_id == collection.id, CollectionRequest.user_id == current_user.id, CollectionRequest.status == "pending"
     )).first()
 
-    # 👇 THE FIX IS RIGHT HERE 👇
     if existing_req: 
         raise HTTPException(status_code=409, detail="You already have a pending request for this collection.")
 
     new_request = CollectionRequest(collection_id=collection.id, user_id=current_user.id, message=payload.message)
     db.add(new_request)
     db.commit()
-    db.refresh(new_request) # REFRESH to grab the auto-generated ID
+    db.refresh(new_request) 
 
-    # Append the request_id directly into the deep_link!
     send_collection_notification(
         db=db, user_id=collection.user_id, title="New Access Request",
         body=f"{current_user.name} wants access to '{collection.title}'", 
@@ -336,7 +335,7 @@ async def submit_access_request(
     return {"message": "Request sent successfully"}
 
 @router.get("/collections/{collection_id}/requests", status_code=status.HTTP_200_OK)
-async def get_pending_requests(
+def get_pending_requests(
     collection_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     collection = db.get(Collection, collection_id)
@@ -350,7 +349,7 @@ async def get_pending_requests(
     return {"requests": formatted_requests}
 
 @router.patch("/collections/requests/{request_id}", status_code=status.HTTP_200_OK)
-async def update_request_status(
+def update_request_status(
     request_id: int,
     payload: RequestStatusUpdate,
     current_user: User = Depends(get_current_user),
@@ -376,7 +375,6 @@ async def update_request_status(
 
     # 5. Execute actions based on the decision
     if payload.status == "approved":
-        # Grant access if they don't already have it
         existing_access = db.exec(select(CollectionAccess).where(
             CollectionAccess.collection_id == collection.id,
             CollectionAccess.user_id == coll_request.user_id
@@ -389,7 +387,6 @@ async def update_request_status(
             )
             db.add(access)
             
-            # Notify the requester that they were approved
             send_collection_notification(
                 db=db, user_id=coll_request.user_id, title="Access Granted!",
                 body=f"@{current_user.name} approved your access to '{collection.title}' — open it now!", 
@@ -397,7 +394,6 @@ async def update_request_status(
             )
             
     elif payload.status == "denied":
-        # Notify the requester that they were denied
         send_collection_notification(
             db=db, user_id=coll_request.user_id, title="Access Denied",
             body=f"Your request to '{collection.title}' was not approved.", deep_link=None
@@ -416,7 +412,7 @@ async def update_request_status(
 # 6. ITEM PICKER & VIEWER ACTIONS
 # ==========================================
 @router.get("/users/me/content", status_code=status.HTTP_200_OK)
-async def get_user_content_for_picker(
+def get_user_content_for_picker(
     types: str = Query("notes,sets,canvases"), search: Optional[str] = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     requested_types = types.split(",")
@@ -446,7 +442,7 @@ async def get_user_content_for_picker(
  
 
 @router.post("/collections/{collection_id}/save", status_code=status.HTTP_200_OK)
-async def save_public_collection(
+def save_public_collection(
     collection_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     original_collection = db.get(Collection, collection_id)
@@ -595,7 +591,7 @@ async def save_public_collection(
         "new_collection_id": new_collection.id
     }
 @router.post("/users/me/library/items", status_code=status.HTTP_200_OK)
-async def save_individual_item(
+def save_individual_item(
     payload: SaveItemRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     if payload.item_type == "note":
@@ -623,7 +619,6 @@ async def save_individual_item(
             db.add(new_card)
 
     elif payload.item_type == "canvas":
-        import uuid
         original_canvas = db.get(Canvas, uuid.UUID(payload.item_id))
         if not original_canvas: raise HTTPException(status_code=404)
         
@@ -653,20 +648,20 @@ async def save_individual_item(
     return {"message": f"{payload.item_type.capitalize()} saved to your library"}
 
 @router.get("/collections/by-token/{share_token}", status_code=status.HTTP_200_OK)
-async def get_collection_metadata_by_token(share_token: str, db: Session = Depends(get_session)):
+def get_collection_metadata_by_token(share_token: str, db: Session = Depends(get_session)):
     collection = db.exec(select(Collection).where(Collection.share_token == share_token)).first()
     if not collection: raise HTTPException(status_code=404, detail="Link invalid or expired")
     owner = db.get(User, collection.user_id)
     return {"collection_id": collection.id, "title": collection.title, "owner_username": owner.name if owner else "Unknown User", "visibility": collection.visibility}
 
 @router.get("/collections/{collection_id}/requests/my", status_code=status.HTTP_200_OK)
-async def check_my_request_status(collection_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)):
+def check_my_request_status(collection_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)):
     req = db.exec(select(CollectionRequest).where(
         CollectionRequest.collection_id == collection_id, CollectionRequest.user_id == current_user.id
     ).order_by(CollectionRequest.id.desc())).first()
     return {"status": req.status if req else "none"}
 
 @router.post("/collections/{collection_id}/report", status_code=status.HTTP_200_OK)
-async def report_collection(collection_id: int, payload: ReportRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)):
+def report_collection(collection_id: int, payload: ReportRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)):
     print(f"Collection {collection_id} reported by {current_user.id} for: {payload.reason}")
     return {"message": "Collection reported. Our team will review it."}

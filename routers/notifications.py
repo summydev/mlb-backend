@@ -6,8 +6,9 @@ from models import User, Notification
 
 router = APIRouter(tags=["Notifications"])
 
+# FIXED: Removed async for synchronous database operations
 @router.get("/users/me/notifications", status_code=status.HTTP_200_OK)
-async def get_my_notifications(current_user: User = Depends(get_current_user), db: Session = Depends(get_session)):
+def get_my_notifications(current_user: User = Depends(get_current_user), db: Session = Depends(get_session)):
     """Fetch the authenticated user's notification history."""
     notifs = db.exec(
         select(Notification)

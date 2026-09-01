@@ -3,6 +3,7 @@ import random
 from fastapi import APIRouter, Depends, status, Query, HTTPException
 from sqlmodel import Session, select, func, or_
 from typing import Optional
+from pydantic import BaseModel, Field
 
 from database import get_session
 from security import get_current_user
@@ -13,10 +14,21 @@ from models import User, Collection, StudyGroup, GroupMember, CoopQuest, Relic, 
 router = APIRouter(prefix="/community", tags=["Community Tab"])
 
 # ==========================================
+# PYDANTIC SCHEMAS (NEW)
+# ==========================================
+class GroupCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=50)
+
+class GroupJoin(BaseModel):
+    invite_code: str = Field(..., min_length=6, max_length=6)
+
+# ==========================================
 # 1. COLLECTIONS DISCOVERY
 # ==========================================
+
+# FIXED: Removed 'async' to safely run synchronous db.exec() without blocking the event loop
 @router.get("/collections", status_code=status.HTTP_200_OK)
-async def get_discover_collections(
+def get_discover_collections(
     search: Optional[str] = None,
     filter: str = Query("All"), 
     page: int = Query(1, ge=1),
@@ -63,10 +75,15 @@ async def get_discover_collections(
 def generate_invite_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
+# FIXED: Uses JSON body (GroupCreate) instead of URL query parameters
 @router.post("/groups", status_code=status.HTTP_201_CREATED)
-def create_group(name: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)):
+def create_group(
+    payload: GroupCreate, 
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_session)
+):
     """Creates a new study group and auto-assigns the creator as a member."""
-    new_group = StudyGroup(name=name, invite_code=generate_invite_code())
+    new_group = StudyGroup(name=payload.name, invite_code=generate_invite_code())
     db.add(new_group)
     db.commit()
     db.refresh(new_group)
@@ -78,10 +95,15 @@ def create_group(name: str, current_user: User = Depends(get_current_user), db: 
     
     return new_group
 
+# FIXED: Uses JSON body (GroupJoin) instead of URL query parameters
 @router.post("/groups/join", status_code=status.HTTP_200_OK)
-def join_group(invite_code: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)):
+def join_group(
+    payload: GroupJoin, 
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_session)
+):
     """Allows a user to join an existing group using the 6-character code."""
-    group = db.exec(select(StudyGroup).where(StudyGroup.invite_code == invite_code)).first()
+    group = db.exec(select(StudyGroup).where(StudyGroup.invite_code == payload.invite_code.upper())).first()
     
     if not group:
         raise HTTPException(status_code=404, detail="Invalid invite code")

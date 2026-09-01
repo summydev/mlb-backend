@@ -4,13 +4,14 @@ import os
 import json
 import uuid
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Header
 from sqlmodel import Session, select, or_
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
+from openai import OpenAI  # FIXED: Switched to synchronous client
 
 # Database, Models, Authentication, and Helpers
 from database import get_session
@@ -24,7 +25,8 @@ load_dotenv()
 
 router = APIRouter(prefix="/study", tags=["Study Tab"])
 
-client = AsyncOpenAI(
+# FIXED: Initialized synchronous client
+client = OpenAI(
     api_key=os.getenv("DEEPSEEK_API_KEY", "fallback-key-for-dev"),
     base_url="https://api.deepseek.com"
 )
@@ -57,11 +59,20 @@ class FeynmanCompleteRequest(BaseModel):
 
 
 # ==========================================
-# HELPER: IN-MEMORY FILE PARSER
+# HELPER FUNCTIONS
 # ==========================================
-async def extract_text_from_file(file: UploadFile) -> str:
+def get_local_now(timezone_str: str = "UTC") -> datetime:
+    """Helper to ensure streaks are calculated in the user's local timezone"""
+    try:
+        tz = ZoneInfo(timezone_str)
+    except ZoneInfoNotFoundError:
+        tz = ZoneInfo("UTC")
+    return datetime.now(tz)
+
+# FIXED: Removed async for thread-safe synchronous execution
+def extract_text_from_file(file: UploadFile) -> str:
     """Reads uploaded files directly from RAM without hitting the disk."""
-    content = await file.read()
+    content = file.file.read() # FIXED: Sync read
     filename = file.filename.lower()
     
     if filename.endswith(".txt"):
@@ -88,7 +99,7 @@ async def extract_text_from_file(file: UploadFile) -> str:
 # ==========================================
 
 @router.get("/sets")
-async def get_user_study_sets(
+def get_user_study_sets( # FIXED: Removed async
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
 ):
@@ -98,7 +109,7 @@ async def get_user_study_sets(
 
 
 @router.get("/sets/{set_id}")
-async def get_study_set(
+def get_study_set( # FIXED: Removed async
     set_id: int, 
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
@@ -141,7 +152,7 @@ async def get_study_set(
 
 
 @router.delete("/sets/{set_id}", status_code=200)
-async def delete_study_set(
+def delete_study_set( # FIXED: Removed async
     set_id: int, 
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
@@ -169,7 +180,7 @@ async def delete_study_set(
 # ========================================================
 
 @router.post("/upload", status_code=201)
-async def upload_and_generate_study_set(
+def upload_and_generate_study_set( # FIXED: Removed async
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
@@ -177,12 +188,12 @@ async def upload_and_generate_study_set(
     """Takes a raw PDF/DOCX, extracts the text, and commands DeepSeek to turn it into flashcards."""
     
     # 1. Extract raw text from the uploaded binary
-    raw_text = await extract_text_from_file(file)
+    raw_text = extract_text_from_file(file)
     
     if not raw_text or len(raw_text.strip()) < 30:
         raise HTTPException(status_code=400, detail="Could not extract enough readable text from this file.")
 
-    # Guardrail: Cap the text sent to DeepSeek at ~25k characters so we don't blow out the context window
+    # Guardrail: Cap the text sent to DeepSeek at ~25k characters
     max_chars = 25000
     if len(raw_text) > max_chars:
         raw_text = raw_text[:max_chars]
@@ -209,7 +220,8 @@ async def upload_and_generate_study_set(
     """
 
     try:
-        response = await client.chat.completions.create(
+        # FIXED: Using sync client, removed await
+        response = client.chat.completions.create(
             model="deepseek-chat",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -220,7 +232,6 @@ async def upload_and_generate_study_set(
 
         ai_data = json.loads(response.choices[0].message.content)
         
-        # Fallback generators just in case the LLM hiccups on a key name
         deck_title = ai_data.get("title", file.filename.rsplit('.', 1)[0])
         deck_subject = ai_data.get("subject", "General")
         generated_cards = ai_data.get("flashcards", [])
@@ -241,7 +252,7 @@ async def upload_and_generate_study_set(
         title=deck_title,
         subject=deck_subject,
         card_count=len(generated_cards),
-        last_studied=datetime.utcnow()
+        last_studied=datetime.now(timezone.utc) # FIXED: Deprecated utcnow()
     )
     db.add(new_study_set)
     db.commit()
@@ -273,7 +284,7 @@ async def upload_and_generate_study_set(
 # ==========================================
 
 @router.get("/sets/{set_id}/cards")
-async def get_flashcards(
+def get_flashcards( # FIXED: Removed async
     set_id: int, 
     order: str = "spaced_repetition", 
     limit: int = 40, 
@@ -324,7 +335,7 @@ async def get_flashcards(
     }
 
 @router.post("/sessions/{session_id}/responses")
-async def record_swipe(
+def record_swipe( # FIXED: Removed async
     session_id: str, 
     payload: SwipeResponse, 
     current_user: User = Depends(get_current_user), 
@@ -352,11 +363,12 @@ async def record_swipe(
     }
 
 @router.post("/sessions/{session_id}/complete")
-async def complete_flashcard_session(
+def complete_flashcard_session( # FIXED: Removed async
     session_id: str, 
     payload: FlashcardCompleteRequest, 
     current_user: User = Depends(get_current_user), 
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    x_timezone: str = Header("UTC") # FIXED: Added Timezone header
 ):
     base_xp = (payload.cards_correct * 5) + (payload.cards_incorrect * 1)
     pet_xp_awarded = int(base_xp * 0.5) 
@@ -371,7 +383,8 @@ async def complete_flashcard_session(
         pet_type = pet.pet_type
         pet_level = pet.level
 
-    today_str = datetime.now().date().isoformat()
+    # FIXED: Compute today using the user's local timezone
+    today_str = get_local_now(x_timezone).date().isoformat()
     daily_activity = db.exec(select(DailyActivity).where(
         DailyActivity.user_id == current_user.id, 
         DailyActivity.date == today_str
@@ -405,7 +418,7 @@ async def complete_flashcard_session(
 # ==========================================
 
 @router.post("/feynman/start")
-async def start_feynman_session(
+def start_feynman_session( # FIXED: Removed async
     payload: FeynmanStartRequest, 
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
@@ -433,7 +446,7 @@ async def start_feynman_session(
     }
 
 @router.post("/feynman/{session_id}/message")
-async def feynman_chat_message(
+def feynman_chat_message( # FIXED: Removed async
     session_id: int, 
     payload: FeynmanMessageRequest, 
     current_user: User = Depends(get_current_user), 
@@ -477,7 +490,8 @@ async def feynman_chat_message(
     """
 
     try:
-        response = await client.chat.completions.create(
+        # FIXED: Removed await, using sync client
+        response = client.chat.completions.create(
             model="deepseek-chat",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -509,7 +523,7 @@ async def feynman_chat_message(
         raise HTTPException(status_code=500, detail="AI failed to process the response. Please try again.")
 
 @router.get("/feynman/{session_id}/score")
-async def get_feynman_score(
+def get_feynman_score( # FIXED: Removed async
     session_id: int, 
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
@@ -531,11 +545,12 @@ async def get_feynman_score(
     }
 
 @router.post("/feynman/{session_id}/complete")
-async def complete_feynman_session(
+def complete_feynman_session( # FIXED: Removed async
     session_id: int, 
     payload: FeynmanCompleteRequest, 
     current_user: User = Depends(get_current_user), 
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    x_timezone: str = Header("UTC") # FIXED: Added timezone header
 ):
     feynman_session = db.get(FeynmanSession, session_id)
     if not feynman_session or feynman_session.user_id != current_user.id:
@@ -547,7 +562,8 @@ async def complete_feynman_session(
     base_xp = payload.final_score 
     pet_xp = int(base_xp * 0.5)
 
-    today_str = datetime.now().date().isoformat()
+    # FIXED: Localize the date to the user's timezone
+    today_str = get_local_now(x_timezone).date().isoformat()
     daily_activity = db.exec(select(DailyActivity).where(
         DailyActivity.user_id == current_user.id, 
         DailyActivity.date == today_str

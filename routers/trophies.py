@@ -1,4 +1,3 @@
-# routers/trophies.py
 from fastapi import APIRouter, Depends, status
 from sqlmodel import Session, select
 from database import get_session
@@ -8,8 +7,9 @@ from services.gamification import TROPHY_DICTIONARY, check_and_award_trophies
 
 router = APIRouter(tags=["Trophies"])
 
+# FIXED: Removed async for synchronous database operations
 @router.get("/users/me/trophies", status_code=status.HTTP_200_OK)
-async def get_my_trophies(
+def get_my_trophies(
     current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_session)
 ):

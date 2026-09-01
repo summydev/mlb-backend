@@ -1,7 +1,6 @@
-# services/gamification.py
 from sqlmodel import Session, select
 from datetime import datetime
-from models import User, UserTrophy, StudySession, DailyActivity, Collection
+from models import User, UserTrophy, StudySession, DailyActivity, Collection, FeynmanSession
 
 # A static dictionary of all possible trophies in your app
 TROPHY_DICTIONARY = {
@@ -33,9 +32,20 @@ def check_and_award_trophies(user: User, db: Session):
 
     # 🏆 RULE 2: COLLECTIONS
     if "collection_creator" not in earned_set:
-        collection_count = db.exec(select(Collection).where(Collection.user_id == user.id)).all()
-        if len(collection_count) > 0:
+        # FIXED: Highly optimized query. Only selects the ID, stops after finding 1.
+        has_collection = db.exec(select(Collection.id).where(Collection.user_id == user.id)).first()
+        if has_collection:
             _award(user.id, "collection_creator", db, newly_earned)
+
+    # 🏆 RULE 3: FEYNMAN (FIXED: Added missing logic)
+    if "feynman_first" not in earned_set:
+        has_feynman = db.exec(select(FeynmanSession.id).where(
+            FeynmanSession.user_id == user.id, 
+            FeynmanSession.is_complete == True
+        )).first()
+        
+        if has_feynman:
+            _award(user.id, "feynman_first", db, newly_earned)
 
     db.commit()
     return newly_earned

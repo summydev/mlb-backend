@@ -1,11 +1,13 @@
 from sqlmodel import Session
 from models import Notification, User
 from firebase_admin import messaging
+import firebase_admin
 
 def send_collection_notification(db: Session, user_id: int, title: str, body: str, deep_link: str = None):
     """
     Saves an in-app notification and triggers a Firebase Cloud Messaging push notification.
     """
+    # 1. Save to Database FIRST
     new_notif = Notification(
         user_id=user_id,
         title=title,
@@ -13,11 +15,14 @@ def send_collection_notification(db: Session, user_id: int, title: str, body: st
         deep_link=deep_link
     )
     db.add(new_notif)
+    db.commit() # FIXED: Commit before making external network calls!
+    db.refresh(new_notif)
     
     target_user = db.get(User, user_id)
     
-    # 3. Trigger Firebase Push Notification
-    if target_user and target_user.fcm_token:
+    # 2. Trigger Firebase Push Notification
+    # Guard check: Ensure Firebase is actually initialized before trying to send
+    if target_user and target_user.fcm_token and firebase_admin._apps:
         message = messaging.Message(
             notification=messaging.Notification(
                 title=title,
@@ -34,6 +39,4 @@ def send_collection_notification(db: Session, user_id: int, title: str, body: st
         except Exception as e:
             print(f"❌ Error sending push notification: {e}")
     else:
-        print(f"⚠️ Push skipped: User {user_id} has no FCM token registered.")
-
-    db.commit()
+        print(f"⚠️ Push skipped: User {user_id} has no FCM token, or Firebase is not initialized.")

@@ -1,5 +1,4 @@
 import uuid
-import asyncio
 import json
 import networkx as nx
 import os
@@ -7,7 +6,7 @@ import io
 from pypdf import PdfReader
 import docx
 
-from openai import AsyncOpenAI
+from openai import OpenAI  # FIXED: Switched to synchronous client
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, UploadFile, File, Form
 from sqlmodel import Session, select, or_
 from typing import List, Optional
@@ -16,25 +15,24 @@ from typing import List, Optional
 from schemas import CanvasCreate, CanvasResponse, CanvasStatusResponse, NodeCreate, NodeResponse
 from models import Canvas, CanvasNode, CanvasConnection, CanvasSourceType, Collection, CollectionAccess, CollectionItem, Note, User
 from security import get_current_user
-from database import get_session 
+from database import get_session, engine  # FIXED: Imported engine for the background task
 
-# ⚠️ Notice: We removed the prefix so we can define explicit paths, just like we did for Notes!
 router = APIRouter(tags=["Canvas Section"])
 
-# Initialize the Async DeepSeek Client
-deepseek_client = AsyncOpenAI(
+# FIXED: Initialize the Synchronous DeepSeek Client
+deepseek_client = OpenAI(
     api_key=os.environ.get("DEEPSEEK_API_KEY"), 
     base_url="https://api.deepseek.com"
 )
-
 
 # ==========================================
 # HELPER FUNCTIONS & BACKGROUND TASKS
 # ==========================================
 
-async def extract_text_from_file(file: UploadFile) -> str:
+# FIXED: Made synchronous to avoid blocking event loop with mixed IO
+def extract_text_from_file(file: UploadFile) -> str:
     """Reads PDF, DOCX, or TXT directly from memory without saving to disk."""
-    content = await file.read()
+    content = file.file.read() # Synchronous read
     text = ""
     
     try:
@@ -58,108 +56,110 @@ async def extract_text_from_file(file: UploadFile) -> str:
     return text.strip()
 
 
-async def process_note_to_canvas_bg(canvas_id: uuid.UUID, note_content: str, db: Session):
+# FIXED: Made synchronous and handles its own independent DB session
+def process_note_to_canvas_bg(canvas_id: uuid.UUID, note_content: str):
     print(f"Starting DeepSeek processing for canvas {canvas_id}...")
     
-    canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id)).first()
-    if not canvas:
-        print("Canvas not found, aborting background task.")
-        return
+    with Session(engine) as db:
+        canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id)).first()
+        if not canvas:
+            print("Canvas not found, aborting background task.")
+            return
 
-    prompt = f"""
-    You are an expert educational AI. Analyze the following study notes and extract a mind map structure.
-    Return ONLY raw, valid JSON. Do not use markdown blocks like ```json.
-    
-    Structure the JSON exactly like this:
-    {{
-      "hero_concept": "The single main topic (string)",
-      "concepts": [
-        {{ "id": "c1", "label": "Concept Name", "is_weak": false, "definition": "Short definition" }}
-      ],
-      "relationships": [
-        {{ "from_id": "hero", "to_id": "c1", "label": "relates to" }},
-        {{ "from_id": "c1", "to_id": "c2", "label": "produces" }}
-      ]
-    }}
-    
-    NOTES TO ANALYZE:
-    {note_content}
-    """
+        prompt = f"""
+        You are an expert educational AI. Analyze the following study notes and extract a mind map structure.
+        Return ONLY raw, valid JSON. Do not use markdown blocks like ```json.
+        
+        Structure the JSON exactly like this:
+        {{
+          "hero_concept": "The single main topic (string)",
+          "concepts": [
+            {{ "id": "c1", "label": "Concept Name", "is_weak": false, "definition": "Short definition" }}
+          ],
+          "relationships": [
+            {{ "from_id": "hero", "to_id": "c1", "label": "relates to" }},
+            {{ "from_id": "c1", "to_id": "c2", "label": "produces" }}
+          ]
+        }}
+        
+        NOTES TO ANALYZE:
+        {note_content}
+        """
 
-    try:
-        response = await deepseek_client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": "You are an API that only returns valid JSON."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"} 
-        )
-        
-        ai_data = json.loads(response.choices[0].message.content)
-        
-    except Exception as e:
-        print(f"DeepSeek Error: {e}")
-        return
-
-    G = nx.Graph()
-    
-    G.add_node("hero")
-    for concept in ai_data.get("concepts", []):
-        G.add_node(concept["id"])
-        
-    for rel in ai_data.get("relationships", []):
-        G.add_edge(rel["from_id"], rel["to_id"])
-        
-    positions = nx.spring_layout(G, center=(1500, 1500), scale=600, seed=42)
-
-    id_map = {} 
-    
-    hero_uuid = uuid.uuid4()
-    id_map["hero"] = hero_uuid
-    hero_node = CanvasNode(
-        id=hero_uuid,
-        canvas_id=canvas_id,
-        label=ai_data.get("hero_concept", "Main Topic")[:40],
-        x=float(positions["hero"][0]),
-        y=float(positions["hero"][1]),
-        size="large",
-        is_hero=True
-    )
-    db.add(hero_node)
-    
-    for concept in ai_data.get("concepts", []):
-        node_uuid = uuid.uuid4()
-        id_map[concept["id"]] = node_uuid
-        
-        node = CanvasNode(
-            id=node_uuid,
-            canvas_id=canvas_id,
-            label=concept["label"][:40],
-            x=float(positions[concept["id"]][0]),
-            y=float(positions[concept["id"]][1]),
-            size="medium",
-            is_weak=concept.get("is_weak", False),
-            definition=concept.get("definition")
-        )
-        db.add(node)
-        
-    for rel in ai_data.get("relationships", []):
-        from_uuid = id_map.get(rel["from_id"])
-        to_uuid = id_map.get(rel["to_id"])
-        
-        if from_uuid and to_uuid:
-            connection = CanvasConnection(
-                canvas_id=canvas_id,
-                from_node_id=from_uuid,
-                to_node_id=to_uuid,
-                label=rel.get("label")
+        try:
+            response = deepseek_client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": "You are an API that only returns valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"} 
             )
-            db.add(connection)
             
-    canvas.node_count = len(ai_data.get("concepts", [])) + 1
-    db.commit()
-    print(f"Successfully processed and mapped canvas {canvas_id}!")
+            ai_data = json.loads(response.choices[0].message.content)
+            
+        except Exception as e:
+            print(f"DeepSeek Error: {e}")
+            return
+
+        G = nx.Graph()
+        
+        G.add_node("hero")
+        for concept in ai_data.get("concepts", []):
+            G.add_node(concept["id"])
+            
+        for rel in ai_data.get("relationships", []):
+            G.add_edge(rel["from_id"], rel["to_id"])
+            
+        positions = nx.spring_layout(G, center=(1500, 1500), scale=600, seed=42)
+
+        id_map = {} 
+        
+        hero_uuid = uuid.uuid4()
+        id_map["hero"] = hero_uuid
+        hero_node = CanvasNode(
+            id=hero_uuid,
+            canvas_id=canvas_id,
+            label=ai_data.get("hero_concept", "Main Topic")[:40],
+            x=float(positions["hero"][0]),
+            y=float(positions["hero"][1]),
+            size="large",
+            is_hero=True
+        )
+        db.add(hero_node)
+        
+        for concept in ai_data.get("concepts", []):
+            node_uuid = uuid.uuid4()
+            id_map[concept["id"]] = node_uuid
+            
+            node = CanvasNode(
+                id=node_uuid,
+                canvas_id=canvas_id,
+                label=concept["label"][:40],
+                x=float(positions[concept["id"]][0]),
+                y=float(positions[concept["id"]][1]),
+                size="medium",
+                is_weak=concept.get("is_weak", False),
+                definition=concept.get("definition")
+            )
+            db.add(node)
+            
+        for rel in ai_data.get("relationships", []):
+            from_uuid = id_map.get(rel["from_id"])
+            to_uuid = id_map.get(rel["to_id"])
+            
+            if from_uuid and to_uuid:
+                connection = CanvasConnection(
+                    canvas_id=canvas_id,
+                    from_node_id=from_uuid,
+                    to_node_id=to_uuid,
+                    label=rel.get("label")
+                )
+                db.add(connection)
+                
+        canvas.node_count = len(ai_data.get("concepts", [])) + 1
+        db.commit()
+        print(f"Successfully processed and mapped canvas {canvas_id}!")
 
 
 # ==========================================
@@ -214,12 +214,13 @@ def create_canvas_from_note(
     db.commit()
     db.refresh(db_canvas)
 
-    background_tasks.add_task(process_note_to_canvas_bg, db_canvas.id, note.content_text, db)
+    # FIXED: Do not pass the `db` session into the background task
+    background_tasks.add_task(process_note_to_canvas_bg, db_canvas.id, note.content_text)
     return {"status": "processing", "node_count": 0, "nodes": []}
 
 # 3. CREATE CANVAS FROM FILE UPLOAD (AI)
 @router.post("/canvases/from-file", response_model=CanvasStatusResponse)
-async def create_canvas_from_file(
+def create_canvas_from_file(  # FIXED: Removed async
     background_tasks: BackgroundTasks,
     name: str = Form(...),
     subject: str = Form(...),
@@ -227,26 +228,24 @@ async def create_canvas_from_file(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
-    # 1. Extract text in-memory
-    document_text = await extract_text_from_file(file)
+    document_text = extract_text_from_file(file)
     
     if not document_text:
         raise HTTPException(status_code=400, detail="Could not extract any text from the uploaded file.")
 
-    # 2. Create the Canvas placeholder in the DB
     db_canvas = Canvas(
         user_id=current_user.id,
         name=name,
         subject=subject,
-        source_type=CanvasSourceType.manual, # Or create a new CanvasSourceType.file if needed
+        source_type=CanvasSourceType.manual,
         source_id=None
     )
     db.add(db_canvas)
     db.commit()
     db.refresh(db_canvas)
 
-    # 3. Fire off your existing background task 
-    background_tasks.add_task(process_note_to_canvas_bg, db_canvas.id, document_text, db)
+    # FIXED: Do not pass the `db` session into the background task
+    background_tasks.add_task(process_note_to_canvas_bg, db_canvas.id, document_text)
     
     return {"status": "processing", "node_count": 0, "nodes": []}
 
@@ -314,7 +313,7 @@ def add_node_to_canvas(
  
 # 7. GET SINGLE CANVAS
 @router.get("/canvases/{canvas_id}", status_code=200)
-async def get_single_canvas(
+def get_single_canvas(  # FIXED: Removed async
     canvas_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
@@ -330,7 +329,6 @@ async def get_single_canvas(
     elif getattr(canvas, "is_public", False):
         is_owner = False
     else:
-        # Check if canvas is inside a PUBLIC collection OR a shared collection the user has access to
         has_access = db.exec(
             select(CollectionItem.id)
             .join(Collection, Collection.id == CollectionItem.collection_id)
@@ -367,22 +365,18 @@ def delete_canvas(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session)
 ):
-    # 1. Find the Canvas
     canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id, Canvas.user_id == current_user.id)).first()
     if not canvas:
         raise HTTPException(status_code=404, detail="Canvas not found")
         
-    # 2. Delete all connections FIRST
     connections = db.exec(select(CanvasConnection).where(CanvasConnection.canvas_id == canvas_id)).all()
     for conn in connections:
         db.delete(conn)
 
-    # 3. Delete all nodes SECOND
     nodes = db.exec(select(CanvasNode).where(CanvasNode.canvas_id == canvas_id)).all()
     for node in nodes:
         db.delete(node)
 
-    # 4. Finally, delete the Canvas itself
     db.delete(canvas)
     db.commit()
     
