@@ -329,3 +329,11 @@ class CollectionDetailResponse(CollectionResponse):
     items: List[CollectionItem] = []
     access_list: List[AccessUser] = []
     pending_requests: List[PendingRequest] = []
+
+class NodeUpdate(BaseModel):
+    label: Optional[str] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
+    size: Optional[str] = None
+    is_hero: Optional[bool] = None
+    is_weak: Optional[bool] = None

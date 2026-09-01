@@ -381,3 +381,78 @@ def delete_canvas(
     db.commit()
     
     return {"message": "Canvas and all its nodes deleted successfully"}
+
+# --------------------------------------------------
+# RENAME / MOVE A CANVAS NODE
+# --------------------------------------------------
+@router.patch("/canvases/{canvas_id}/nodes/{node_id}", status_code=200)
+def update_canvas_node(
+    canvas_id: uuid.UUID,
+    node_id: uuid.UUID,
+    payload: NodeUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session)
+):
+    # 1. Verify the user actually owns this canvas
+    canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id, Canvas.user_id == current_user.id)).first()
+    if not canvas:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+        
+    # 2. Find the specific node
+    node = db.exec(select(CanvasNode).where(CanvasNode.id == node_id, CanvasNode.canvas_id == canvas_id)).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+        
+    # 3. Safely apply only the fields provided by the Flutter app
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(node, key, value)
+        
+    db.add(node)
+    db.commit()
+    db.refresh(node)
+    
+    return node
+
+
+# --------------------------------------------------
+# DELETE A CANVAS NODE
+# --------------------------------------------------
+@router.delete("/canvases/{canvas_id}/nodes/{node_id}", status_code=200)
+def delete_canvas_node(
+    canvas_id: uuid.UUID,
+    node_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session)
+):
+    # 1. Verify ownership
+    canvas = db.exec(select(Canvas).where(Canvas.id == canvas_id, Canvas.user_id == current_user.id)).first()
+    if not canvas:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+        
+    # 2. Find the node
+    node = db.exec(select(CanvasNode).where(CanvasNode.id == node_id, CanvasNode.canvas_id == canvas_id)).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+        
+    # 3. Clean up any Connections (Lines) attached to this node
+    # This prevents invisible "ghost lines" from crashing the UI renderer later
+    connections = db.exec(
+        select(CanvasConnection)
+        .where((CanvasConnection.from_node_id == node_id) | (CanvasConnection.to_node_id == node_id))
+    ).all()
+    
+    for conn in connections:
+        db.delete(conn)
+        
+    # 4. Delete the node itself
+    db.delete(node)
+    
+    # 5. Keep the parent Canvas metadata accurate
+    if canvas.node_count > 0:
+        canvas.node_count -= 1
+        db.add(canvas)
+        
+    db.commit()
+    
+    return {"message": "Node deleted successfully"}
