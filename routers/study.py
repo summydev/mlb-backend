@@ -21,6 +21,9 @@ from models import User, StudySet, Flashcard, FeynmanSession, DailyActivity, Pet
 # ✨ IMPORT THE STREAK HELPER ✨
 from routers.profile import update_user_streak
 
+# 👉 NEW: IMPORT THE CO-OP XP HOOK
+from routers.community import contribute_to_group_quests
+
 load_dotenv() 
 
 router = APIRouter(prefix="/study", tags=["Study Tab"])
@@ -397,6 +400,10 @@ def complete_flashcard_session( # FIXED: Removed async
     
     db.add(daily_activity)
     update_user_streak(current_user, db)
+    
+    # 👉 THE MAGIC HOOK: Funnel the earned XP into active Co-op Quests!
+    contribute_to_group_quests(user_id=current_user.id, xp_amount=base_xp, db=db)
+    
     db.commit()
 
     return {
@@ -587,6 +594,10 @@ def complete_feynman_session( # FIXED: Removed async
         pet_level = pet.level
 
     update_user_streak(current_user, db)
+
+    # 👉 THE MAGIC HOOK: Funnel the earned XP into active Co-op Quests!
+    contribute_to_group_quests(user_id=current_user.id, xp_amount=base_xp, db=db)
+
     db.commit()
 
     return {

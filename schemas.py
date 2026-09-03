@@ -336,4 +336,4 @@ class NodeUpdate(BaseModel):
     y: Optional[float] = None
     size: Optional[str] = None
     is_hero: Optional[bool] = None
-    is_weak: Optional[bool] = None
+    is_weak: Optional[bool] = None  
